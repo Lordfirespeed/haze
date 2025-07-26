@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net9.0": {
+      "MinVer": {
+        "type": "Direct",
+        "requested": "[4.*, 5.0.0)",
+        "resolved": "4.3.0",
+        "contentHash": "YNVAW3loCFW4kTwensApaZUl+7xREK75QQNOFSbsbXx2sCSm9/IHBjUHsJGn3u0UA5r/sAqrdYBNUlOFfLhUrA=="
+      }
+    }
+  }
+}

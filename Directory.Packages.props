@@ -1,0 +1,46 @@
+<Project>
+
+    <PropertyGroup>
+        <!-- https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management#enabling-central-package-management -->
+        <!-- enable CPM: specify solution package versions here, not spread across the repository -->
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+        <!-- https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management#transitive-pinning -->
+        <!-- allow transitive dependencies' versions to be overridden, provided the override is a suitable version -->
+        <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+
+        <!-- https://learn.microsoft.com/en-us/nuget/reference/errors-and-warnings/nu1011 -->
+        <!-- https://learn.microsoft.com/en-us/nuget/concepts/dependency-resolution#lowest-applicable-version -->
+        <!-- allow 'floating' versions; without them, NuGet chooses the 'lowest applicable' version -->
+        <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
+
+        <!-- https://devblogs.microsoft.com/dotnet/enable-repeatable-package-restores-using-a-lock-file/ -->
+        <!-- enable project package lockfiles to mitigate non-deterministic behaviour introduced by floating versions -->
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+
+        <!-- enable locked restore mode in CI -->
+        <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+
+        <DotNetPackageVersionFloat>[8.*, 9.0.0)</DotNetPackageVersionFloat>
+    </PropertyGroup>
+
+    <!-- Development dependencies -->
+    <ItemGroup>
+        <PackageVersion Include="MinVer" Version="[4.*, 5.0.0)" />
+        <PackageVersion Include="JetBrains.Annotations" Version="[2024.*, 2025.0.0)" />
+    </ItemGroup>
+
+    <!-- Runtime dependencies -->
+    <ItemGroup>
+        <PackageVersion Include="SteamKit2" Version="[3.*, 4.0.0)" />
+        <PackageVersion Include="Mono.Posix" Version="[7.*-*, 8.0.0)" />
+        <!-- Serilog + pinned transitive dependencies -->
+        <PackageVersion Include="Serilog" Version="[4.*, 5.0.0)" />
+        <PackageVersion Include="System.Diagnostics.DiagnosticSource" Version="$(DotNetPackageVersionFloat)" />
+        <PackageVersion Include="System.Threading.Channels" Version="$(DotNetPackageVersionFloat)" />
+        <PackageVersion Include="System.Memory" Version="[4.*, 5.0.0)" />
+        <PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="[6.*, 7.0.0)" />
+        <!-- End Serilog -->
+    </ItemGroup>
+
+</Project>
