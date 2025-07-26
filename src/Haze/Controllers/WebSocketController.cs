@@ -1,26 +1,29 @@
 using System;
+using System.Net;
+using System.Net.Http;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Haze.Mvc;
+using Haze.Util;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Haze.Controllers;
 
+[ApiController]
 public class WebSocketController : ControllerBase
 {
     [Route("/api/websocket")]
-    public async Task Connect()
+    [HttpGet, HttpConnect]
+    public async Task<IActionResult> Connect()
     {
-        if (HttpContext.WebSockets.IsWebSocketRequest)
-        {
-            using var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
-            await Echo(webSocket);
-        }
-        else
-        {
-            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-        }
+        if (!HttpContext.WebSockets.IsWebSocketRequest)
+            return Problem("Only websocket requests are allowed", statusCode: StatusCodes.Status400BadRequest);
+
+        using var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+        await Echo(webSocket);
+        return Empty;
     }
 
     private static async Task Echo(WebSocket webSocket)
