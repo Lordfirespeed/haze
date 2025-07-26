@@ -41,6 +41,11 @@
         <PackageVersion Include="System.Memory" Version="[4.*, 5.0.0)" />
         <PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="[6.*, 7.0.0)" />
         <!-- End Serilog -->
+        <!-- EntityFramework + pinned transitive dependencies -->
+        <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(DotNetPackageVersionFloat)" />
+        <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="$(DotNetPackageVersionFloat)" />
+        <PackageVersion Include="Npgsql" Version="$(DotNetPackageVersionFloat)" />
+        <!-- End EntityFramework -->
     </ItemGroup>
 
 </Project>
