@@ -1,10 +1,11 @@
+using Haze.Mvc;
 using Haze.Util;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Haze.Controllers;
 
 
-public class HomeController : ControllerBase
+public class HomeController : HazeControllerBase
 {
     [Route("/api")]
     [HttpGet, HttpHead]

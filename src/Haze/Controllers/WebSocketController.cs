@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Haze.Controllers;
 
 [ApiController]
-public class WebSocketController : ControllerBase
+public class WebSocketController : HazeControllerBase
 {
     [Route("/api/websocket")]
     [HttpGet, HttpConnect]
