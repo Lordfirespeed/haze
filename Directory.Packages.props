@@ -21,7 +21,7 @@
         <!-- enable locked restore mode in CI -->
         <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
 
-        <DotNetPackageVersionFloat>[8.*, 9.0.0)</DotNetPackageVersionFloat>
+        <DotNetPackageVersionFloat>[9.*, 10.0.0)</DotNetPackageVersionFloat>
     </PropertyGroup>
 
     <!-- Development dependencies -->
