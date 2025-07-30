@@ -13,8 +13,4 @@
         <PackageReference Include="SteamKit2" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Models\" />
-    </ItemGroup>
-
 </Project>
