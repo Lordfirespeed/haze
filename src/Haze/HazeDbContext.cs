@@ -1,5 +1,7 @@
 using Haze.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using SteamKit2;
 
 namespace Haze;
 
@@ -9,6 +11,49 @@ public class HazeDbContext : DbContext
     public DbSet<HazeClient> HazeClients { get; init; }
     public DbSet<HazeClientSession> HazeClientSessions { get; init; }
 
+    public DbSet<SteamAccount> SteamAccounts { get; init; }
+    public DbSet<SteamAccountCredential> SteamAccountCredentials { get; init; }
+    public DbSet<SteamLicense> SteamLicenses { get; init; }
+    public DbSet<SteamPackage> SteamPackages { get; init; }
+    public DbSet<SteamLicenseEntitlement> SteamLicenseEntitlements { get; init; }
+
+    private static readonly ValueConverter<SteamID, ulong> SteamIdValueConverter = new(
+        v => v.ConvertToUInt64(),
+        v => new SteamID(v)
+    );
+
     protected override void OnConfiguring(DbContextOptionsBuilder options)
-        => options.UseNpgsql("");  // what to put here?
+        => options.UseNpgsql("postgresql://haze:haze@localhost:5432/haze?schema=public");
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<SteamAccount>()
+            .HasMany(account => account.Licenses)
+            .WithMany(license => license.EntitledAccounts)
+            .UsingEntity<SteamLicenseEntitlement>();
+
+        modelBuilder
+            .Entity<SteamAccount>()
+            .Property(account => account.SteamAccountId)
+            .HasConversion(SteamIdValueConverter);
+
+        modelBuilder
+            .Entity<SteamAccountCredential>()
+            .Property(credential => credential.SteamAccountId)
+            .HasConversion(SteamIdValueConverter);
+
+        modelBuilder
+            .Entity<SteamLicense>()
+            .Property(license => license.OwnerAccountId)
+            .HasConversion(SteamIdValueConverter);
+
+        modelBuilder
+            .Entity<SteamLicenseEntitlement>()
+            .Property(license => license.EntitledAccountId)
+            .HasConversion(SteamIdValueConverter);
+        modelBuilder
+            .Entity<SteamLicenseEntitlement>()
+            .Property(license => license.LicenseOwnerAccountId)
+            .HasConversion(SteamIdValueConverter);
+    }
 }
