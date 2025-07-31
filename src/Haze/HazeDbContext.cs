@@ -16,6 +16,9 @@ public class HazeDbContext : DbContext
     public DbSet<SteamLicense> SteamLicenses { get; init; }
     public DbSet<SteamPackage> SteamPackages { get; init; }
     public DbSet<SteamLicenseEntitlement> SteamLicenseEntitlements { get; init; }
+    public DbSet<SteamApp> SteamApps { get; init; }
+    public DbSet<SteamDepot> SteamDepots { get; init; }
+    public DbSet<SteamAppDepotConfig> SteamAppDepotConfigs { get; init; }
 
     private static readonly ValueConverter<SteamID, ulong> SteamIdValueConverter = new(
         v => v.ConvertToUInt64(),
