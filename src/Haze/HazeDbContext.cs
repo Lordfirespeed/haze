@@ -26,7 +26,7 @@ public class HazeDbContext : DbContext
     );
 
     protected override void OnConfiguring(DbContextOptionsBuilder options)
-        => options.UseNpgsql("postgresql://haze:haze@localhost:5432/haze?schema=public");
+        => options.UseNpgsql("Host=localhost; Port=5432; Username=haze; Password=haze; Database=haze;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
