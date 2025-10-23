@@ -25,6 +25,7 @@ public class HazeDbContext : DbContext
         v => new SteamID(v)
     );
 
+    /// <seealso href="https://www.npgsql.org/doc/connection-string-parameters.html">Connection String Parameters</seealso>
     protected override void OnConfiguring(DbContextOptionsBuilder options)
         => options.UseNpgsql("Host=localhost; Username=haze; Password=haze; Database=haze;");
 
