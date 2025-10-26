@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
@@ -23,14 +24,10 @@ public class SteamAccountCredential
     public string SteamRefreshToken { get; set; } = null!;
 
     [Required]
-    public DateTime RefreshedAt { get; set; }
-
-    [Required]
-    public DateTime RefreshAttemptedAt { get; set; }
-
-    [Required]
     public SteamID SteamAccountId { get; set; } = null!;
 
     [ForeignKey(nameof(SteamAccountId))]
     public SteamAccount Account { get; set; } = null!;
+
+    public ICollection<SteamAccountCredentialRefreshAttempt> RefreshAttempts { get; set; } = new List<SteamAccountCredentialRefreshAttempt>();
 }
