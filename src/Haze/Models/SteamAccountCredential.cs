@@ -12,6 +12,9 @@ public class SteamAccountCredential
     public uint CredentialId { get; set; }
 
     [Required]
+    public SteamAccountCredentialUsage Usage { get; set; }
+
+    [Required]
     [StringLength(1024)]
     public string SteamAccessToken { get; set; } = null!;
 
