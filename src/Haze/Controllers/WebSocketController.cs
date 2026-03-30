@@ -23,11 +23,11 @@ public class WebSocketController : HazeControllerBase
         return Empty;
     }
 
-    private static async Task Echo(WebSocket webSocket)
+    private static async Task Echo(WebSocket webSocket, CancellationToken ct = default)
     {
         var buffer = new byte[1024 * 4];
         var receiveResult = await webSocket.ReceiveAsync(
-            new ArraySegment<byte>(buffer), CancellationToken.None);
+            new ArraySegment<byte>(buffer), ct);
 
         while (!receiveResult.CloseStatus.HasValue)
         {
@@ -35,15 +35,15 @@ public class WebSocketController : HazeControllerBase
                 new ArraySegment<byte>(buffer, 0, receiveResult.Count),
                 receiveResult.MessageType,
                 receiveResult.EndOfMessage,
-                CancellationToken.None);
+                ct);
 
             receiveResult = await webSocket.ReceiveAsync(
-                new ArraySegment<byte>(buffer), CancellationToken.None);
+                new ArraySegment<byte>(buffer), ct);
         }
 
         await webSocket.CloseAsync(
             receiveResult.CloseStatus.Value,
             receiveResult.CloseStatusDescription,
-            CancellationToken.None);
+            ct);
     }
 }
