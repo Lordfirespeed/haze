@@ -36,17 +36,17 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
 
     private async Task Handle(WebSocket webSocket, CancellationToken ct = default)
     {
-        HazeMessage? message;
+        HazeC2SMessage? message;
 
         while (true)
         {
             message = await ReceiveMessage(webSocket, ct);
             if (message is null) return;
-            _logger.LogInformation("is it an auth message: {}", message is HazeAuthenticateMessage);
+            _logger.LogInformation("is it an auth message: {}", message is HazeC2SAuthenticateMessage);
         }
     }
 
-    private async Task<HazeMessage?> ReceiveMessage(WebSocket webSocket, CancellationToken ct = default)
+    private async Task<HazeC2SMessage?> ReceiveMessage(WebSocket webSocket, CancellationToken ct = default)
     {
         var buffer = new byte[1024 * 4];
         int totalReceived = 0;
@@ -73,10 +73,10 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
             if (receiveResult.EndOfMessage) break;
         }
 
-        HazeMessage? message = null;
+        HazeC2SMessage? message = null;
         try {
             var messageStream = new MemoryStream(buffer, 0, totalReceived);
-            message = await JsonSerializer.DeserializeAsync<HazeMessage>(messageStream, MessageSerializeOptions, ct);
+            message = await JsonSerializer.DeserializeAsync<HazeC2SMessage>(messageStream, MessageSerializeOptions, ct);
         }
         catch (JsonException exception)
         {

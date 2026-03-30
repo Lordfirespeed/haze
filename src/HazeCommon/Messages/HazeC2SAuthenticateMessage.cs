@@ -1,6 +1,6 @@
 namespace HazeCommon.Messages;
 
-public class HazeAuthenticateMessage : HazeMessage
+public class HazeC2SAuthenticateMessage : HazeC2SMessage
 {
     public string ClientId { get; set; }
 
