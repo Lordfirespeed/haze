@@ -1,6 +1,4 @@
-using System.Text.Json.Serialization;
-
-namespace Haze.Messages;
+namespace HazeCommon.Messages;
 
 public class HazeAuthenticateMessage : HazeMessage
 {
