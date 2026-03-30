@@ -5,12 +5,14 @@ using System.Threading.Tasks;
 using Haze.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace Haze.Controllers;
 
 [ApiController]
-public class WebSocketController : HazeControllerBase
+public class WebSocketController : HazeControllerBase<WebSocketController>
 {
+    public WebSocketController(ILogger<WebSocketController> logger) : base(logger) { }
     [Route("/api/websocket")]
     [HttpGet, HttpConnect]
     public async Task<IActionResult> Connect()
