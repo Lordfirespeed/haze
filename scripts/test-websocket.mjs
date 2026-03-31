@@ -4,7 +4,7 @@ const foo = new WebSocket("ws://localhost:5000/api/websocket")
 
 function afterOpen() {
   console.log("heck yeah we open")
-  foo.send(JSON.stringify({"$type": "authenticate", "client_id": "foo", "client_secret": "bar"}))
+  foo.send(JSON.stringify({"$type": "authenticate-v1", "client_id": "foo", "client_secret": "bar"}))
 }
 
 foo.addEventListener("message", function(event) {
@@ -20,9 +20,3 @@ foo.addEventListener("error", function(event) {
 
 foo.addEventListener("open", (event) => afterOpen());
 if (foo.readyState === foo.OPEN) afterOpen();
-
-try {
-  await new Promise(() => {})
-} finally {
-  foo.close()
-}
