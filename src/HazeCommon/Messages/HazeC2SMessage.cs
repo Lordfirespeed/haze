@@ -4,6 +4,8 @@ namespace HazeCommon.Messages;
 
 [JsonDerivedType(typeof(HazeC2SAuthenticateMessage), typeDiscriminator: "authenticate-v1")]
 [JsonDerivedType(typeof(HazeC2SHeartbeatMessage), typeDiscriminator: "heartbeat-v1")]
+[JsonDerivedType(typeof(HazeC2SNewSessionMessage), typeDiscriminator: "new-session-v1")]
+[JsonDerivedType(typeof(HazeC2SResumeSessionMessage), typeDiscriminator: "resume-session-v1")]
 public class HazeC2SMessage
 {
 
