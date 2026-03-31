@@ -12,7 +12,6 @@ foo.addEventListener("message", function(event) {
 })
 foo.addEventListener("close", function(event) {
   console.log(`close: ${event.data}`)
-  foo.close()
 })
 foo.addEventListener("error", function(event) {
   console.log(`error: ${event.data}`)
