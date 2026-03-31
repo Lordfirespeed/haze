@@ -8,13 +8,18 @@ public sealed class AsyncLock
 {
     private readonly SemaphoreSlim _semaphore = new(1);
 
-    public async ValueTask Wait() => await _semaphore.WaitAsync();
+    public async ValueTask Wait(CancellationToken ct = default) => await _semaphore.WaitAsync(ct);
 
-    public async ValueTask Release() => _semaphore.Release(1);
-
-    public async ValueTask<IAsyncDisposable> EnterScope()
+    public ValueTask Release(CancellationToken ct = default)
     {
-        await Wait();
+        if (ct.IsCancellationRequested) return ValueTask.FromCanceled(ct);
+        _semaphore.Release(1);
+        return ValueTask.CompletedTask;
+    }
+
+    public async ValueTask<IAsyncDisposable> EnterScope(CancellationToken ct = default)
+    {
+        await Wait(ct);
         return new Scope(this);
     }
 
