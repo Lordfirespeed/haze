@@ -14,6 +14,8 @@ builder.WebHost.ConfigureKestrel(options => {
 });
 builder.Services.AddControllers();
 
+builder.Configuration["Logging:LogLevel:Default"] = "Debug";
+
 var app = builder.Build();
 app.UseWebSockets(new WebSocketOptions {
     KeepAliveInterval = TimeSpan.FromSeconds(10),
