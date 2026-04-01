@@ -19,25 +19,22 @@ namespace Haze.Controllers;
 [ApiController]
 public class WebSocketController : HazeControllerBase<WebSocketController>
 {
-    private static readonly Dictionary<Type, IHazeC2SMessageHandler> HandlerCache = new();
-    private static readonly IHazeC2SMessageHandler[] Handlers =
-    [
-        new HazeC2SAuthenticateHandler(),
-    ];
+    private readonly Dictionary<Type, IHazeC2SMessageHandler> _handlerCache = new();
+    private readonly IHazeC2SMessageHandler[] _handlers;
 
-    protected static HazeC2SMessageHandler<TMessage> GetHandler<TMessage>() where TMessage : HazeC2SMessage
+    protected HazeC2SMessageHandler<TMessage> GetHandler<TMessage>() where TMessage : HazeC2SMessage
     {
         var handler = GetHandler(typeof(TMessage));
         Debug.Assert(handler is HazeC2SMessageHandler<TMessage>);
         return (HazeC2SMessageHandler<TMessage>)handler;
     }
 
-    protected static IHazeC2SMessageHandler GetHandler(Type messageType)
+    protected IHazeC2SMessageHandler GetHandler(Type messageType)
     {
-        if (HandlerCache.TryGetValue(messageType, out var cachedHandler)) return cachedHandler;
-        foreach (var handler in Handlers) {
+        if (_handlerCache.TryGetValue(messageType, out var cachedHandler)) return cachedHandler;
+        foreach (var handler in _handlers) {
             if (!handler.CanHandle(messageType)) continue;
-            HandlerCache.Add(messageType, handler);
+            _handlerCache.Add(messageType, handler);
             return handler;
         }
         throw new KeyNotFoundException($"No suitable handler registered for {messageType.Name}");
@@ -48,7 +45,12 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
         FullMode = BoundedChannelFullMode.Wait,
     };
 
-    public WebSocketController(ILogger<WebSocketController> logger) : base(logger) { }
+    public WebSocketController(ILogger<WebSocketController> logger, HazeDbContext dbContext) : base(logger, dbContext)
+    {
+        _handlers = [
+            new HazeC2SAuthenticateHandler(_dbContext),
+        ];
+    }
 
     [Route("/api/websocket")]
     [HttpGet, HttpConnect]
