@@ -14,6 +14,12 @@ public static class TaskExtensions
         catch (OperationCanceledException exc) { }
     }
 
+    public static async Task IgnoreCancellationBy(this Task @this, CancellationToken ct)
+    {
+        try { await @this; }
+        catch (OperationCanceledException exc) when (exc.CancellationToken == ct) { }
+    }
+
     public static Task WithAggregatedExceptions(this Task @this)
     {
         return @this
