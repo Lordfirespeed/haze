@@ -32,10 +32,9 @@ public class HazeWebSocket
 
     public HazeClientSession? ClientSession { get; set; }
 
-    public async Task<HazeC2SMessage?> ReceiveMessage(CancellationToken ct = default)
+    public async Task<HazeC2SMessage> ReceiveMessage(CancellationToken ct = default)
     {
         var messageStream = await ReceiveRawMessage(ct);
-        if (messageStream is null) return null;
 
         HazeC2SMessage? message;
         try {
@@ -44,23 +43,21 @@ public class HazeWebSocket
         catch (JsonException exception)
         {
             await using var sendScope = await _sendLock.EnterScope(CancellationToken.None);
-            Logger.LogDebug(exception, "Closing connection as message contained malformed JSON contents");
             await WebSocket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Only messages of type 'text' containing a single JSON-encoded object are acceptable", CancellationToken.None);
-            return null;
+            throw new OperationCanceledException("Connection closed; received a message with malformed JSON contents", exception);
         }
 
         if (message is null || message.GetType() == typeof(HazeC2SMessage))
         {
             await using var sendScope = await _sendLock.EnterScope(CancellationToken.None);
-            Logger.LogDebug("Closing connection as message is empty");
             await WebSocket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "Empty messages (i.e. 'null', '{}') are not acceptable", CancellationToken.None);
-            return null;
+            throw new OperationCanceledException("Connection closed; received a valid JSON-encoded message, but it was empty or null");
         }
 
         return message;
     }
 
-    public async Task<MemoryStream?> ReceiveRawMessage(CancellationToken ct = default)
+    public async Task<MemoryStream> ReceiveRawMessage(CancellationToken ct = default)
     {
         await using var receiveScope = await _receiveLock.EnterScope(ct);
         var buffer = new byte[1024 * 4];
@@ -71,7 +68,7 @@ public class HazeWebSocket
             {
                 await using var sendScope = await _sendLock.EnterScope(CancellationToken.None);
                 await WebSocket.CloseAsync(WebSocketCloseStatus.MessageTooBig, "Single message too large - maximum allowed size 4KiB", CancellationToken.None);
-                return null;
+                throw new OperationCanceledException("Connection closed; received message exceeding allowed size");
             }
             var receiveResult = await WebSocket.ReceiveAsync(new ArraySegment<byte>(buffer, totalReceived, buffer.Length - totalReceived), ct);
             totalReceived += receiveResult.Count;
@@ -79,13 +76,13 @@ public class HazeWebSocket
             {
                 await using var sendScope = await _sendLock.EnterScope(CancellationToken.None);
                 await WebSocket.CloseAsync(receiveResult.CloseStatus.Value, receiveResult.CloseStatusDescription, CancellationToken.None);
-                return null;
+                throw new OperationCanceledException("Connection closed; remote party completed the close handshake and closed the WebSocket connection");
             }
             if (receiveResult.MessageType is not WebSocketMessageType.Text)
             {
                 await using var sendScope = await _sendLock.EnterScope(CancellationToken.None);
                 await WebSocket.CloseAsync(WebSocketCloseStatus.InvalidMessageType, "Only messages of type 'text' containing JSON data are acceptable", CancellationToken.None);
-                return null;
+                throw new OperationCanceledException("Connection closed; received message with non-text contents");
             }
 
             if (receiveResult.EndOfMessage) break;
