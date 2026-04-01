@@ -16,7 +16,8 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 app.UseWebSockets(new WebSocketOptions {
-    KeepAliveInterval = TimeSpan.FromMinutes(2),
+    KeepAliveInterval = TimeSpan.FromSeconds(10),
+    KeepAliveTimeout = TimeSpan.FromSeconds(10),
 });
 app.MapControllers();
 
