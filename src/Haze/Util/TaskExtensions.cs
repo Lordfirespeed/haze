@@ -29,6 +29,14 @@ public static class TaskExtensions
             .Unwrap();
     }
 
+    /**
+     * <summary>
+     * Creates a task that will complete when all of the <see cref="Task"/> objects in an enumerable collection have
+     * completed.
+     * If any task does not run to completion (i.e. it faults or is cancelled), the provided
+     * <see cref="CancellationTokenSource"/> is cancelled.
+     * </summary>
+     */
     public static Task Group(IEnumerable<Task> tasks, CancellationTokenSource cts)
     {
         var continuations = tasks.Select(
