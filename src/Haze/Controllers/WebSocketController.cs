@@ -87,7 +87,6 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
         while (true) {
             ct.ThrowIfCancellationRequested();
             var message = await webSocket.ReceiveMessage(ct);
-            _logger.LogInformation("is it an auth message: {}", message is HazeC2SAuthenticateMessage);
             IHazeC2SMessageHandler handler;
             try {
                 handler = GetHandler(message.GetType());
