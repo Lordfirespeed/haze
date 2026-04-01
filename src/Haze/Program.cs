@@ -3,6 +3,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Haze;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +14,7 @@ builder.WebHost.ConfigureKestrel(options => {
     options.ListenAnyIP(5000);
 });
 builder.Services.AddControllers();
+builder.Services.AddDbContext<HazeDbContext>();
 
 builder.Configuration["Logging:LogLevel:Default"] = "Debug";
 
