@@ -8,7 +8,7 @@ namespace Haze.Controllers;
 
 public class HomeController : HazeControllerBase<HomeController>
 {
-    public HomeController(ILogger<HomeController> logger) : base(logger) { }
+    public HomeController(ILogger<HomeController> logger, HazeDbContext dbContext) : base(logger, dbContext) { }
 
     [Route("/api")]
     [HttpGet, HttpHead]
