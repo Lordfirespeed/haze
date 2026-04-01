@@ -26,7 +26,7 @@ public class HazeWebSocket
         Logger = logger;
     }
 
-    protected ILogger Logger { get; }
+    public ILogger Logger { get; }
 
     public WebSocket WebSocket { get; }
 
