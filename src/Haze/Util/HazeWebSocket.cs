@@ -96,7 +96,7 @@ public class HazeWebSocket
 
     public async Task SendMessage(HazeS2CMessage message, CancellationToken ct = default)
     {
-        await using var sendScope = await _sendLock.EnterScope();
+        await using var sendScope = await _sendLock.EnterScope(ct);
         await WebSocket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(message, MessageSerializeOptions), WebSocketMessageType.Text, true, ct);
     }
 }
