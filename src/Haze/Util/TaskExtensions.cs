@@ -11,7 +11,7 @@ public static class TaskExtensions
     public static async Task IgnoreCancellation(this Task @this)
     {
         try { await @this; }
-        catch (Exception exc) when (exc is TaskCanceledException or OperationCanceledException) { }
+        catch (OperationCanceledException exc) { }
     }
 
     public static Task WithAggregatedExceptions(this Task @this)
@@ -48,7 +48,7 @@ public static class TaskExtensions
                 cts.Token,
                 TaskContinuationOptions.NotOnRanToCompletion,
                 TaskScheduler.Default
-            ).Unwrap().IgnoreCancellation()
+            ).Unwrap().IgnoreCancellationBy(cts.Token)
         );
 
         return Task.WhenAll(continuations);
