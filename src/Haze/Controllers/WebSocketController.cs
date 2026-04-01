@@ -48,6 +48,8 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
             await TaskExtensions.Group([receiveLoopTask, sendLoopTask], cts);
         } catch (WebSocketException exc) {
             _logger.LogDebug(exc, "WebSocket exception occurred");
+        } catch (OperationCanceledException exc) {
+            _logger.LogDebug(exc, "WebSocket closed and handling cancelled gracefully");
         }
     }
 
@@ -56,7 +58,6 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
         while (true) {
             ct.ThrowIfCancellationRequested();
             var message = await webSocket.ReceiveMessage(ct);
-            if (message is null) throw new OperationCanceledException("Received an invalid message");
             _logger.LogInformation("is it an auth message: {}", message is HazeC2SAuthenticateMessage);
             await messageQueue.WriteAsync(new HazeS2CSessionCreatedMessage { SessionId = "foo" }, ct);
         }
