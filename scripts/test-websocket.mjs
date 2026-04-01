@@ -11,10 +11,10 @@ foo.addEventListener("message", function(event) {
   console.log(`message: ${event.data}`);
 })
 foo.addEventListener("close", function(event) {
-  console.log(`close: ${event.data}`)
+  console.log(`close: ${event.code}, ${event.reason}`)
 })
 foo.addEventListener("error", function(event) {
-  console.log(`error: ${event.data}`)
+  console.log(`an error occurred`)
 })
 
 foo.addEventListener("open", (event) => afterOpen());
