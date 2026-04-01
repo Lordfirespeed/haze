@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Haze.MessageHandlers;
 using Haze.Mvc;
 using Haze.Util;
 using HazeCommon.Messages;
@@ -16,6 +19,30 @@ namespace Haze.Controllers;
 [ApiController]
 public class WebSocketController : HazeControllerBase<WebSocketController>
 {
+    private static readonly Dictionary<Type, IHazeC2SMessageHandler> HandlerCache = new();
+    private static readonly IHazeC2SMessageHandler[] Handlers =
+    [
+        new HazeC2SAuthenticateHandler(),
+    ];
+
+    protected static HazeC2SMessageHandler<TMessage> GetHandler<TMessage>() where TMessage : HazeC2SMessage
+    {
+        var handler = GetHandler(typeof(TMessage));
+        Debug.Assert(handler is HazeC2SMessageHandler<TMessage>);
+        return (HazeC2SMessageHandler<TMessage>)handler;
+    }
+
+    protected static IHazeC2SMessageHandler GetHandler(Type messageType)
+    {
+        if (HandlerCache.TryGetValue(messageType, out var cachedHandler)) return cachedHandler;
+        foreach (var handler in Handlers) {
+            if (!handler.CanHandle(messageType)) continue;
+            HandlerCache.Add(messageType, handler);
+            return handler;
+        }
+        throw new KeyNotFoundException($"No suitable handler registered for {messageType.Name}");
+    }
+
     private static readonly BoundedChannelOptions ChannelOptions = new(8)
     {
         FullMode = BoundedChannelFullMode.Wait,
@@ -59,7 +86,14 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
             ct.ThrowIfCancellationRequested();
             var message = await webSocket.ReceiveMessage(ct);
             _logger.LogInformation("is it an auth message: {}", message is HazeC2SAuthenticateMessage);
-            await messageQueue.WriteAsync(new HazeS2CSessionCreatedMessage { SessionId = "foo" }, ct);
+            IHazeC2SMessageHandler handler;
+            try {
+                handler = GetHandler(message.GetType());
+            } catch (KeyNotFoundException exc) {
+                _logger.LogWarning(exc, "Missing handler");
+                continue;
+            }
+            await handler.Handle(webSocket, message, ct);
         }
     }
 
