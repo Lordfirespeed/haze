@@ -15,6 +15,13 @@ public interface IHazeC2SMessageHandler
 
 public abstract class HazeC2SMessageHandler<TMessage> : IHazeC2SMessageHandler where TMessage : HazeC2SMessage
 {
+    protected HazeDbContext DbContext;
+
+    public HazeC2SMessageHandler(HazeDbContext dbContext)
+    {
+        DbContext = dbContext;
+    }
+
     public abstract Task Handle(HazeWebSocket webSocket, TMessage message, CancellationToken ct = default);
 
     public Task Handle(HazeWebSocket webSocket, HazeC2SMessage message, CancellationToken ct = default)
