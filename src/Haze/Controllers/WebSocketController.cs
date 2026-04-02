@@ -51,6 +51,7 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
             new HazeC2SAuthenticateHandler(_dbContext, _logger),
             new HazeC2SNewSessionHandler(_dbContext, _logger),
             new HazeC2SResumeSessionHandler(_dbContext, _logger),
+            new HazeC2SWhoAmIHandler(_dbContext, _logger),
         ];
     }
 
