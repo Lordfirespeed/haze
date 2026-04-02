@@ -1,11 +1,22 @@
 #!/usr/bin/env node
 
+import { randomBytes } from "node:crypto"
+import { promisify } from "node:util"
+
+const randomBytesAsync = promisify(randomBytes)
+
 const foo = new WebSocket("ws://localhost:5000/api/websocket")
 
-function afterOpen() {
+async function makeMessageId() {
+  var bytes = await randomBytesAsync(6);
+  return bytes.toString("hex")
+}
+
+async function afterOpen() {
   console.log("heck yeah we open")
-  foo.send(JSON.stringify({"$type": "new-session-v1"}))
-  foo.send(JSON.stringify({"$type": "authenticate-v1", "client_id": "fancy-client", "client_secret": "a-very-fancy-secret"}))
+  foo.send(JSON.stringify({"$type": "resume-session-v1", "id": await makeMessageId(), "session_id": "nGUNUrfJyN9vLaU2F68s_weLld0Yk4BCWpni3t7DCZyI6YYQIuP3X3ytohw8khPb"}))
+  foo.send(JSON.stringify({"$type": "authenticate-v1", "id": await makeMessageId(), "client_id": "fancy-client", "client_secret": "a-very-fancy-secret"}))
+  foo.send(JSON.stringify({"$type": "whoami-v1", "id": await makeMessageId()}))
 }
 
 foo.addEventListener("message", function(event) {
