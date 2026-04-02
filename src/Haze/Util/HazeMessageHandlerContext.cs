@@ -12,7 +12,11 @@ public sealed class HazeMessageHandlerContext(HazeWebSocket webSocket, ChannelWr
     public ValueTask QueueS2CMessage(HazeS2CMessage message, CancellationToken ct = default)
         => messageQueueWriter.WriteAsync(message, ct);
 
-    public HazeClientSession? Session => webSocket.ClientSession;
+    public HazeClientSession? Session
+    {
+        get => webSocket.ClientSession;
+        set => webSocket.ClientSession = value;
+    }
 
     public ILogger Logger => webSocket.Logger;
 }
