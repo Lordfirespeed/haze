@@ -8,20 +8,20 @@ namespace Haze.MessageHandlers;
 
 public class HazeC2SAuthenticateHandler : HazeC2SMessageHandler<HazeC2SAuthenticateMessage>
 {
-    public HazeC2SAuthenticateHandler(HazeDbContext dbContext) : base(dbContext) { }
+    public HazeC2SAuthenticateHandler(HazeDbContext dbContext, ILogger logger) : base(dbContext, logger) { }
 
-    public override async Task Handle(HazeWebSocket webSocket, HazeC2SAuthenticateMessage message, CancellationToken ct = default)
+    public override async Task Handle(HazeC2SAuthenticateMessage message, HazeMessageHandlerContext context, CancellationToken ct = default)
     {
-        if (webSocket.ClientSession is null) {
-            webSocket.Logger.LogInformation("session not initialised");
+        if (context.Session is null) {
+            context.Logger.LogInformation("session not initialised");
             return;
         }
         var client = await DbContext.HazeClients.FindAsync([message.ClientId], ct);
         if (client == null) {
-            webSocket.Logger.LogInformation("client does not exist");
+            context.Logger.LogInformation("client does not exist");
             return;
         }
-        webSocket.ClientSession.ClientId = client.ClientId;
+        context.Session.ClientId = client.ClientId;
         await DbContext.SaveChangesAsync(ct);
     }
 }
