@@ -20,7 +20,13 @@ public class HazeC2SNewSessionHandler : HazeC2SMessageHandler<HazeC2SNewSessionM
     public override async Task Handle(HazeC2SNewSessionMessage message, HazeMessageHandlerContext context, CancellationToken ct = default)
     {
         if (context.Session is not null) {
-            context.Logger.LogInformation("Session already initialised");
+            await context.QueueS2CMessage(new HazeS2CErrorMessage
+            {
+                RegardingMessageId = message.MessageId,
+                ErrorCode = "ERR_SESSION_EXISTS",
+                ErrorTitle = "Bad Message",
+                ErrorDetail = "Session already initialised",
+            }, ct);
             return;
         }
 

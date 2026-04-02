@@ -13,13 +13,25 @@ public class HazeC2SResumeSessionHandler : HazeC2SMessageHandler<HazeC2SResumeSe
     public override async Task Handle(HazeC2SResumeSessionMessage message, HazeMessageHandlerContext context, CancellationToken ct = default)
     {
         if (context.Session is not null) {
-            context.Logger.LogInformation("Session already initialised");
+            await context.QueueS2CMessage(new HazeS2CErrorMessage
+            {
+                RegardingMessageId = message.MessageId,
+                ErrorCode = "ERR_SESSION_EXISTS",
+                ErrorTitle = "Bad Message",
+                ErrorDetail = "Session already initialised",
+            }, ct);
             return;
         }
 
         var session = await DbContext.HazeClientSessions.FindAsync([message.SessionId], ct);
         if (session is null) {
-            context.Logger.LogInformation("Session not found");
+            await context.QueueS2CMessage(new HazeS2CErrorMessage
+            {
+                RegardingMessageId = message.MessageId,
+                ErrorCode = "ERR_SESSION_NOT_FOUND",
+                ErrorTitle = "Not Found",
+                ErrorDetail = "Requested session does not exist",
+            }, ct);
             return;
         }
         context.Session = session;
