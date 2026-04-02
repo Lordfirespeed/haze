@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace HazeCommon.Messages;
 
 [JsonDerivedType(typeof(HazeS2CSessionCreatedMessage), typeDiscriminator: "session-created-v1")]
-public class HazeS2CMessage
+public abstract class HazeS2CMessage
 {
     [JsonPropertyName("id")]
     public string MessageId { get; } = HazeMessages.MakeMessageId();
