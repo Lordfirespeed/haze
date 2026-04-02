@@ -19,6 +19,11 @@ public class HazeC2SNewSessionHandler : HazeC2SMessageHandler<HazeC2SNewSessionM
 
     public override async Task Handle(HazeC2SNewSessionMessage message, HazeMessageHandlerContext context, CancellationToken ct = default)
     {
+        if (context.Session is not null) {
+            context.Logger.LogInformation("Session already initialised");
+            return;
+        }
+
         context.Session = new HazeClientSession { SessionId = GenerateSessionId() };
         DbContext.HazeClientSessions.Add(context.Session);
         await DbContext.SaveChangesAsync(ct);
