@@ -27,6 +27,9 @@ public class HazeC2SNewSessionHandler : HazeC2SMessageHandler<HazeC2SNewSessionM
         context.Session = new HazeClientSession { SessionId = GenerateSessionId() };
         DbContext.HazeClientSessions.Add(context.Session);
         await DbContext.SaveChangesAsync(ct);
-        await context.QueueS2CMessage(new HazeS2CSessionCreatedMessage { SessionId = context.Session.SessionId}, ct);
+        await context.QueueS2CMessage(new HazeS2CSessionCreatedMessage {
+            SessionId = context.Session.SessionId,
+            RegardingMessageId = message.MessageId,
+        }, ct);
     }
 }
