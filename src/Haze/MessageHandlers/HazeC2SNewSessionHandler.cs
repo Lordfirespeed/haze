@@ -1,0 +1,23 @@
+using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
+using Haze.Models;
+using Haze.Util;
+using HazeCommon.Messages;
+using Microsoft.Extensions.Logging;
+
+namespace Haze.MessageHandlers;
+
+public class HazeC2SNewSessionHandler : HazeC2SMessageHandler<HazeC2SNewSessionMessage>
+{
+    private const string SessionIdCharacters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
+
+    public HazeC2SNewSessionHandler(HazeDbContext dbContext, ILogger logger) : base(dbContext, logger) { }
+
+    public string GenerateSessionId() => RandomNumberGenerator.GetString(SessionIdCharacters, 64);
+
+    public override async Task Handle(HazeC2SNewSessionMessage message, HazeMessageHandlerContext context, CancellationToken ct = default)
+    {
+        context.Session = new HazeClientSession { SessionId = GenerateSessionId() };
+    }
+}
