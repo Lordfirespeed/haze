@@ -4,7 +4,8 @@ const foo = new WebSocket("ws://localhost:5000/api/websocket")
 
 function afterOpen() {
   console.log("heck yeah we open")
-  foo.send(JSON.stringify({"$type": "authenticate-v1", "client_id": "foo", "client_secret": "bar"}))
+  foo.send(JSON.stringify({"$type": "new-session-v1"}))
+  foo.send(JSON.stringify({"$type": "authenticate-v1", "client_id": "fancy-client", "client_secret": "a-very-fancy-secret"}))
 }
 
 foo.addEventListener("message", function(event) {
