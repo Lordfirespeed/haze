@@ -91,8 +91,16 @@ public class HazeWebSocket
     public async Task SendMessage(HazeS2CMessage message, CancellationToken ct = default)
     {
         await using var sendScope = await _sendLock.EnterScope(ct);
-        await WebSocket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(message, MessageSerializeOptions), WebSocketMessageType.Text, true, ct);
+        await SendMessageUnsafe(message, ct);
     }
+
+    private Task SendMessageUnsafe(HazeS2CMessage message, CancellationToken ct = default)
+        => WebSocket.SendAsync(
+            JsonSerializer.SerializeToUtf8Bytes(message, MessageSerializeOptions),
+            WebSocketMessageType.Text,
+            true,
+            ct
+        );
 
     public Task Close(
         WebSocketCloseStatus closeStatus,
@@ -107,7 +115,7 @@ public class HazeWebSocket
         CancellationToken ct = default
     ) {
         await using var sendScope = await _sendLock.EnterScope(ct);
-        if (closeMessage is not null) await SendMessage(closeMessage, ct);
+        if (closeMessage is not null) await SendMessageUnsafe(closeMessage, ct);
         await WebSocket.CloseAsync(closeStatus, closeStatusDetail, ct);
     }
 }
