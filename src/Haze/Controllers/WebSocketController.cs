@@ -84,6 +84,8 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
 
     private async Task ReceiveLoop(HazeWebSocket webSocket, ChannelWriter<HazeS2CMessage> messageQueue, CancellationToken ct = default)
     {
+        var handlerContext = new HazeMessageHandlerContext(webSocket, messageQueue);
+
         while (true) {
             ct.ThrowIfCancellationRequested();
             var message = await webSocket.ReceiveMessage(ct);
@@ -94,7 +96,7 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
                 _logger.LogWarning(exc, "Missing handler");
                 continue;
             }
-            await handler.Handle(webSocket, message, ct);
+            await handler.Handle(message, handlerContext, ct);
         }
     }
 
