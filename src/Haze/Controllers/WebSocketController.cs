@@ -82,6 +82,9 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
             _logger.LogDebug(exc, "WebSocket exception occurred");
         } catch (OperationCanceledException exc) {
             _logger.LogDebug(exc, "WebSocket closed and handling cancelled gracefully");
+        } finally {
+            if (webSocket.ClientSession is { ClientId: null }) _dbContext.Remove(webSocket.ClientSession);
+            await _dbContext.SaveChangesAsync(CancellationToken.None);
         }
     }
 
