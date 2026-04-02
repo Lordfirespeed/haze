@@ -48,7 +48,7 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
     public WebSocketController(ILogger<WebSocketController> logger, HazeDbContext dbContext) : base(logger, dbContext)
     {
         _handlers = [
-            new HazeC2SAuthenticateHandler(_dbContext),
+            new HazeC2SAuthenticateHandler(_dbContext, _logger),
         ];
     }
 
