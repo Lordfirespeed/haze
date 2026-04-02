@@ -32,6 +32,8 @@ public class HazeWebSocket
 
     public HazeClientSession? ClientSession { get; set; }
 
+    public WebSocketState State => WebSocket.State;
+
     public async Task<HazeC2SMessage> ReceiveMessage(CancellationToken ct = default)
     {
         var messageStream = await ReceiveRawMessage(ct);
