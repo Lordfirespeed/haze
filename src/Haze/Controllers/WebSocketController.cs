@@ -103,6 +103,8 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
                 continue;
             }
             await handler.Handle(message, handlerContext, ct);
+            if (webSocket.State is WebSocketState.Closed)
+                throw new OperationCanceledException("Message handler opted to close the connection for unspecified reason");
         }
     }
 
