@@ -8,5 +8,6 @@ namespace HazeCommon.Messages;
 [JsonDerivedType(typeof(HazeC2SResumeSessionMessage), typeDiscriminator: "resume-session-v1")]
 public class HazeC2SMessage
 {
-
+    [JsonPropertyName("id")]
+    public string MessageId { get; } = HazeMessages.MakeMessageId();
 }
