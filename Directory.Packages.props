@@ -37,6 +37,7 @@
         <!-- Serilog + pinned transitive dependencies -->
         <PackageVersion Include="Serilog" Version="[4.*, 5.0.0)" />
         <PackageVersion Include="System.Diagnostics.DiagnosticSource" Version="$(DotNetPackageVersionFloat)" />
+        <PackageVersion Include="System.Linq.Async" Version="[7.*, 8.0.0)" />
         <PackageVersion Include="System.Threading.Channels" Version="$(DotNetPackageVersionFloat)" />
         <PackageVersion Include="System.Memory" Version="[4.*, 5.0.0)" />
         <PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="[6.*, 7.0.0)" />

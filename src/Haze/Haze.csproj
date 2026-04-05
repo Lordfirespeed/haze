@@ -11,6 +11,7 @@
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
         <PackageReference Include="Mono.Posix" />
         <PackageReference Include="SteamKit2" />
+        <PackageReference Include="System.Linq.Async" />
     </ItemGroup>
     
     <ItemGroup>
