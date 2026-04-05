@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
@@ -34,4 +36,7 @@ public class HazeClientJob
      */
     [StringLength(64)]
     public string? PendingReasonCode { get; set; }
+
+    public ICollection<HazeClientJobRequestedDepot> JobRequestedDepots { get; set; } = [];
+    public ICollection<SteamDepot> RequestedDepots { get; set; } = [];
 }

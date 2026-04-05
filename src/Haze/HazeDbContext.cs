@@ -11,6 +11,7 @@ public class HazeDbContext : DbContext
     public DbSet<HazeClient> HazeClients { get; init; }
     public DbSet<HazeClientSession> HazeClientSessions { get; init; }
     public DbSet<HazeClientJob> HazeClientJobs { get; init; }
+    public DbSet<HazeClientJobRequestedDepot> HazeClientJobRequestedDepots { get; init; }
     public DbSet<HazeCredentialAllocation> HazeCredentialAllocations { get; init; }
 
     public DbSet<SteamAccount> SteamAccounts { get; init; }
@@ -33,6 +34,11 @@ public class HazeDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<HazeClientJob>()
+            .HasMany(job => job.RequestedDepots)
+            .WithMany()
+            .UsingEntity<HazeClientJobRequestedDepot>();
+
         modelBuilder.Entity<SteamAccount>()
             .HasMany(account => account.Licenses)
             .WithMany(license => license.EntitledAccounts)
