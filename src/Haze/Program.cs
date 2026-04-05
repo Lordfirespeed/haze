@@ -4,6 +4,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Haze;
+using Haze.Scheduling;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,8 @@ builder.WebHost.ConfigureKestrel(options => {
 });
 builder.Services.AddControllers();
 builder.Services.AddDbContext<HazeDbContext>();
+builder.Services.AddDbContextFactory<HazeDbContext>();
+builder.Services.AddHostedService<GreedySchedulingService>();
 
 builder.Configuration["Logging:LogLevel:Default"] = "Debug";
 
