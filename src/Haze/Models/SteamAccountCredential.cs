@@ -30,4 +30,6 @@ public class SteamAccountCredential
     public SteamAccount Account { get; set; } = null!;
 
     public ICollection<SteamAccountCredentialRefreshAttempt> RefreshAttempts { get; set; } = new List<SteamAccountCredentialRefreshAttempt>();
+
+    public ICollection<HazeCredentialAllocation> Allocations { get; set; } = null!;
 }

@@ -16,6 +16,7 @@ public class HazeCredentialAllocation
     public ulong JobId { get; set; }
 
     [ForeignKey(nameof(CredentialId))]
+    [InverseProperty(nameof(SteamAccountCredential.Allocations))]
     public SteamAccountCredential Credential { get; set; } = null!;
 
     [ForeignKey(nameof(JobId))]
