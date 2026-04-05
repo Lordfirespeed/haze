@@ -17,6 +17,8 @@ public class HazeClientSession
     [ForeignKey(nameof(ClientId))]
     public HazeClient? Client { get; set; }
 
+    public HazeClientJob? Job { get; set; }
+
     /**
      * As long as the WebSocket connection is alive, <see cref="DisconnectAt"/> should be <c>null</c>.
      * If the connection is dropped, <see cref="DisconnectAt"/> should be set to the time of disconnection.

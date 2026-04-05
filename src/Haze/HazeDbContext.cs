@@ -10,6 +10,8 @@ public class HazeDbContext : DbContext
 {
     public DbSet<HazeClient> HazeClients { get; init; }
     public DbSet<HazeClientSession> HazeClientSessions { get; init; }
+    public DbSet<HazeClientJob> HazeClientJobs { get; init; }
+    public DbSet<HazeCredentialAllocation> HazeCredentialAllocations { get; init; }
 
     public DbSet<SteamAccount> SteamAccounts { get; init; }
     public DbSet<SteamAccountCredential> SteamAccountCredentials { get; init; }
