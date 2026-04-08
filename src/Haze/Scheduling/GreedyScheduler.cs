@@ -3,14 +3,18 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Haze.Models;
+using Haze.Util;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Haze.Scheduling;
 
-public class GreedySchedulingService(ILogger<GreedySchedulingService> logger, IDbContextFactory<HazeDbContext> dbContextFactory) : BackgroundService
-{
+public class GreedySchedulingService(
+    ILogger<GreedySchedulingService> logger,
+    IDbContextFactory<HazeDbContext> dbContextFactory,
+    HazeConnectionManager connectionManager
+) : BackgroundService {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         while (true) {
@@ -32,6 +36,7 @@ public class GreedySchedulingService(ILogger<GreedySchedulingService> logger, ID
             jobDbContext.Attach(pendingJob);
             // todo: there should probably be a try/catch here
             await AttemptToStartJob(pendingJob, jobDbContext, ct);
+            await jobDbContext.SaveChangesAsync(ct);
         }
     }
 
@@ -57,12 +62,21 @@ public class GreedySchedulingService(ILogger<GreedySchedulingService> logger, ID
     {
         Debug.Assert(job.State is HazeClientJobState.Pending);
 
-        // todo: check the socket is connected
+        if (!connectionManager.IsConnected(job.OwnerSessionId)) {
+            job.PendingReasonCode = "session-disconnected";
+            return;
+        }
 
         var credential = await ResolveAvailableCredential(job, dbContext, ct);
-        if (credential is null) return;
+        if (credential is null) {
+            job.PendingReasonCode = "resources";
+            return;
+        }
 
-        // todo: check the socket is *still* connected
+        if (!connectionManager.IsConnected(job.OwnerSessionId)) {
+            job.PendingReasonCode = "session-disconnected";
+            return;
+        }
 
         dbContext.HazeCredentialAllocations.Add(new HazeCredentialAllocation {
             CredentialId = credential.CredentialId,
@@ -75,5 +89,6 @@ public class GreedySchedulingService(ILogger<GreedySchedulingService> logger, ID
         // todo: refresh the credential
 
         // todo: transmit the credential to the client
+        logger.LogInformation("heck yeah it's time to send the credential {}", credential.CredentialId);
     }
 }
