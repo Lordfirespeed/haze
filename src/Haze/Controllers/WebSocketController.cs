@@ -19,6 +19,8 @@ namespace Haze.Controllers;
 [ApiController]
 public class WebSocketController : HazeControllerBase<WebSocketController>
 {
+    private readonly HazeConnectionManager _connectionManager;
+
     private readonly Dictionary<Type, IHazeC2SMessageHandler> _handlerCache = new();
     private readonly IHazeC2SMessageHandler[] _handlers;
 
@@ -45,12 +47,13 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
         FullMode = BoundedChannelFullMode.Wait,
     };
 
-    public WebSocketController(ILogger<WebSocketController> logger, HazeDbContext dbContext) : base(logger, dbContext)
+    public WebSocketController(ILogger<WebSocketController> logger, HazeDbContext dbContext, HazeConnectionManager connectionManager) : base(logger, dbContext)
     {
+        _connectionManager = connectionManager;
         _handlers = [
             new HazeC2SAuthenticateHandler(_dbContext, _logger),
-            new HazeC2SNewSessionHandler(_dbContext, _logger),
-            new HazeC2SResumeSessionHandler(_dbContext, _logger),
+            new HazeC2SNewSessionHandler(_dbContext, _logger, _connectionManager),
+            new HazeC2SResumeSessionHandler(_dbContext, _logger, _connectionManager),
             new HazeC2SWhoAmIHandler(_dbContext, _logger),
         ];
     }
@@ -83,6 +86,7 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
         } catch (OperationCanceledException exc) {
             _logger.LogDebug(exc, "WebSocket closed and handling cancelled gracefully");
         } finally {
+            if (webSocket.ClientSession is not null) _connectionManager.DropConnection(webSocket.ClientSession.SessionId);
             if (webSocket.ClientSession is { ClientId: null }) _dbContext.Remove(webSocket.ClientSession);
             await _dbContext.SaveChangesAsync(CancellationToken.None);
         }

@@ -11,9 +11,13 @@ namespace Haze.MessageHandlers;
 
 public class HazeC2SNewSessionHandler : HazeC2SMessageHandler<HazeC2SNewSessionMessage>
 {
+    private readonly HazeConnectionManager _connectionManager;
     private const string SessionIdCharacters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
 
-    public HazeC2SNewSessionHandler(HazeDbContext dbContext, ILogger logger) : base(dbContext, logger) { }
+    public HazeC2SNewSessionHandler(HazeDbContext dbContext, ILogger logger, HazeConnectionManager connectionManager) : base(dbContext, logger)
+    {
+        _connectionManager = connectionManager;
+    }
 
     public string GenerateSessionId() => RandomNumberGenerator.GetString(SessionIdCharacters, 64);
 
@@ -33,6 +37,7 @@ public class HazeC2SNewSessionHandler : HazeC2SMessageHandler<HazeC2SNewSessionM
         context.Session = new HazeClientSession { SessionId = GenerateSessionId() };
         DbContext.HazeClientSessions.Add(context.Session);
         await DbContext.SaveChangesAsync(ct);
+        _connectionManager.AddConnection(context.Session.SessionId, context);
         await context.QueueS2CMessage(new HazeS2CSessionCreatedMessage {
             SessionId = context.Session.SessionId,
             RegardingMessageId = message.MessageId,

@@ -8,7 +8,12 @@ namespace Haze.MessageHandlers;
 
 public class HazeC2SResumeSessionHandler : HazeC2SMessageHandler<HazeC2SResumeSessionMessage>
 {
-    public HazeC2SResumeSessionHandler(HazeDbContext dbContext, ILogger logger) : base(dbContext, logger) { }
+    private readonly HazeConnectionManager _connectionManager;
+
+    public HazeC2SResumeSessionHandler(HazeDbContext dbContext, ILogger logger, HazeConnectionManager connectionManager) : base(dbContext, logger)
+    {
+        _connectionManager = connectionManager;
+    }
 
     public override async Task Handle(HazeC2SResumeSessionMessage message, HazeMessageHandlerContext context, CancellationToken ct = default)
     {
@@ -35,5 +40,6 @@ public class HazeC2SResumeSessionHandler : HazeC2SMessageHandler<HazeC2SResumeSe
             return;
         }
         context.Session = session;
+        _connectionManager.AddConnection(session.SessionId, context);
     }
 }
