@@ -13,7 +13,7 @@
         <PackageReference Include="SteamKit2" />
         <PackageReference Include="System.Linq.Async" />
     </ItemGroup>
-    
+
     <ItemGroup>
         <ProjectReference Include="$(MSBuildThisFileDirectory)../HazeCommon/HazeCommon.csproj" />
     </ItemGroup>
