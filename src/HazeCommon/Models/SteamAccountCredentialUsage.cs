@@ -1,4 +1,4 @@
-namespace Haze.Models;
+namespace HazeCommon.Models;
 
 public enum SteamAccountCredentialUsage
 {

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Haze.Models;
 using Haze.Util;
+using HazeCommon.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
