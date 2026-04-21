@@ -50,6 +50,7 @@ public class HazeC2SSteamQrAuthHandler : HazeC2SMessageHandler<HazeC2SSteamQrAut
             );
             return;
         }
+        await connection.LogOn();
 
         await context.QueueS2CMessage(
             new HazeS2CSuccessMessage { RegardingMessageId = message.MessageId }, ct
