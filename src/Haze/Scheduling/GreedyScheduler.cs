@@ -45,12 +45,12 @@ public class GreedySchedulingService(
     {
         return dbContext.SteamAccountCredentials
             .Where(credential => credential.Usage == SteamAccountCredentialUsage.ForLease)
-            .Where(credential => credential.Allocations
-                .All(allocation => allocation.Job.State != HazeClientJobState.Running)
-            )
+            .Where(credential => credential.Allocations.All(
+                allocation => allocation.Job.State != HazeClientJobState.Running
+            ))
             .Where(credential => job.RequestedDepots.All(
-                depot => depot.Packages.Any(package =>
-                    package.Licenses.Any(
+                depot => depot.Packages.Any(
+                    package => package.Licenses.Any(
                         license => license.OwnerAccountId == credential.SteamAccountId
                     )
                 )
