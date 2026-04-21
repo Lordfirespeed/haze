@@ -20,19 +20,18 @@ public class SteamConnection : IAsyncDisposable
     public string? AccountName { get; protected set; }
     public SteamTokenSet? TokenSet { get; protected set; }
 
-    [MemberNotNullWhen(true, nameof(ClientSteamId))]
-    public bool IsLoggedOn { get; protected set; } = false;
-    public SteamID? ClientSteamId { get; protected set; }
+    [MemberNotNullWhen(true, nameof(AccountId))]
+    public bool HasLoggedOn { get; protected set; } = false;
+    public bool IsLoggedOn { get; protected set; }
+    public SteamID? AccountId { get; protected set; }
 
     private readonly CancellationTokenSource _runManagerCts = new();
     private readonly Task _runManagerTask;
 
     private readonly IDisposable[] _subscriptions;
     private readonly ILogger _logger;
-
-    private readonly TaskCompletionSource _connectedTaskSource = new();
-    public bool HasConnected => _connectedTaskSource.Task.IsCompleted;
-    public bool IsConnected =>  HasConnected && !HasDisconnected;
+    public bool HasConnected { get; protected set; }
+    public bool IsConnected => HasConnected && !HasDisconnected;
 
     private readonly TaskCompletionSource _disconnectedTaskSource = new();
     public bool HasDisconnected => _disconnectedTaskSource.Task.IsCompleted;
@@ -56,11 +55,37 @@ public class SteamConnection : IAsyncDisposable
     public async Task Connect()
     {
         if (HasConnected) return;
-        using var _ = Manager.Subscribe<SteamClient.ConnectedCallback>(_ => _connectedTaskSource.SetResult());
+        var connectedTaskSource = new TaskCompletionSource();
+        using var _ = Manager.Subscribe<SteamClient.ConnectedCallback>(_ => connectedTaskSource.SetResult());
         _logger.LogDebug("Connecting to Steam");
         Client.Connect();
-        await _connectedTaskSource.Task;
+        await connectedTaskSource.Task;
+        HasConnected = true;
         _logger.LogDebug("Connected to Steam");
+    }
+
+    public async Task LogOn()
+    {
+        if (!IsConnected) throw new InvalidOperationException();
+        if (!HasAuthenticated) throw new InvalidOperationException();
+
+        var loggedOnTaskSource = new TaskCompletionSource<SteamUser.LoggedOnCallback>();
+        using var _ = Manager.Subscribe<SteamUser.LoggedOnCallback>(loggedOnTaskSource.SetResult);
+        User.LogOn(new SteamUser.LogOnDetails {
+            LoginID = (uint)new Random().Next(int.MinValue, int.MaxValue),
+            Username = AccountName,
+            AccessToken = TokenSet?.RefreshToken,
+            ShouldRememberPassword = true,
+        });
+        await loggedOnTaskSource.Task;
+        var callback = loggedOnTaskSource.Task.Result;
+        if (callback.Result is not EResult.OK) {
+            throw new Exception($"Steam logon failed: {callback.Result} / {callback.ExtendedResult}");
+        }
+
+        AccountId = callback.ClientSteamID;
+        HasLoggedOn = true;
+        IsLoggedOn = true;
     }
 
     public async Task QrAuth(Func<QrAuthSession, Task> notifyChallengeUrl, CancellationToken ct)
@@ -108,7 +133,6 @@ public class SteamConnection : IAsyncDisposable
     {
         _logger.LogDebug($"Logged off: {callback.Result}");
         IsLoggedOn = false;
-        ClientSteamId = null;
     }
 
     public async ValueTask DisposeAsync()
