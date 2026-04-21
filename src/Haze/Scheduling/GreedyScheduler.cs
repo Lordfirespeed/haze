@@ -55,11 +55,12 @@ public class GreedySchedulingService(
                     )
                 )
             ))
-            .Where(credential => credential.Account.Credentials.Count(
-                otherCredential => otherCredential.Allocations.Any(
+            .Where(credential => credential.Account.Credentials
+                .Where(otherCredential => otherCredential.Usage == SteamAccountCredentialUsage.ForLease)
+                .Count(otherCredential => otherCredential.Allocations.Any(
                     allocation => allocation.Job.State == HazeClientJobState.Running
                 )
-            ) < 5)
+            ) < 4)
             .OrderBy(credential => credential.Account.OwnedLicenses.Count)
             .FirstOrDefaultAsync(ct);
     }
