@@ -131,6 +131,13 @@ public class SteamConnection : IAsyncDisposable
         HasAuthenticated = true;
     }
 
+    public void CachedAuth(string accountName, SteamTokenSet tokenSet)
+    {
+        AccountName = accountName;
+        TokenSet = tokenSet;
+        HasAuthenticated = true;
+    }
+
     public async Task Disconnect()
     {
         if (!IsConnected) return;
