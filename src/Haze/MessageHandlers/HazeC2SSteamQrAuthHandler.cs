@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Haze.Models;
 using Haze.Steam;
 using Haze.Util;
 using HazeCommon.Messages;
@@ -51,6 +52,24 @@ public class HazeC2SSteamQrAuthHandler : HazeC2SMessageHandler<HazeC2SSteamQrAut
             return;
         }
         await connection.LogOn();
+
+        var account = await DbContext.SteamAccounts.FindAsync([connection.AccountId], ct);
+        if (account == null) {
+            account = new SteamAccount
+            {
+                SteamAccountId = connection.AccountId!,
+                SteamAccountName = connection.AccountName!,
+            };
+            DbContext.SteamAccounts.Add(account);
+        }
+        account.Credentials.Add(
+            new SteamAccountCredential {
+                Usage = message.CredentialUsage,
+                SteamAccessToken = connection.TokenSet!.AccessToken,
+                SteamRefreshToken = connection.TokenSet!.RefreshToken,
+            }
+        );
+        await DbContext.SaveChangesAsync(ct);
 
         await context.QueueS2CMessage(
             new HazeS2CSuccessMessage { RegardingMessageId = message.MessageId }, ct
