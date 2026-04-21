@@ -16,13 +16,16 @@ public class SteamConnection : IAsyncDisposable
     public SteamUser User { get; }
 
     [MemberNotNullWhen(true, nameof(AccountName), nameof(TokenSet))]
-    public bool HasAuthenticated { get; protected set; } = false;
+    public bool HasAuthenticated { get; protected set; }
     public string? AccountName { get; protected set; }
     public SteamTokenSet? TokenSet { get; protected set; }
 
     [MemberNotNullWhen(true, nameof(AccountId))]
-    public bool HasLoggedOn { get; protected set; } = false;
+    public bool HasLoggedOn { get; protected set; }
+
+    [MemberNotNullWhen(true, nameof(AccountId))]
     public bool IsLoggedOn { get; protected set; }
+
     public SteamID? AccountId { get; protected set; }
 
     private readonly CancellationTokenSource _runManagerCts = new();
@@ -86,6 +89,18 @@ public class SteamConnection : IAsyncDisposable
         AccountId = callback.ClientSteamID;
         HasLoggedOn = true;
         IsLoggedOn = true;
+    }
+
+    public async Task RefreshTokenSet()
+    {
+        if (!HasAuthenticated || !IsLoggedOn) throw new InvalidOperationException();
+        var response = await Client.Authentication.GenerateAccessTokenForAppAsync(
+            AccountId,
+            TokenSet.RefreshToken,
+            allowRenewal: true
+        );
+        var refreshToken = String.IsNullOrWhiteSpace(response.RefreshToken) ? TokenSet.RefreshToken : response.RefreshToken;
+        TokenSet = new(response.AccessToken, refreshToken);
     }
 
     public async Task QrAuth(Func<QrAuthSession, Task> notifyChallengeUrl, CancellationToken ct)
