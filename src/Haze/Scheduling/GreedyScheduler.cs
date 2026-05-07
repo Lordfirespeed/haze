@@ -125,7 +125,8 @@ public class GreedySchedulingService(
 
         var conn = connectionManager.GetConnection(job.OwnerSessionId);
         if (conn is null) {
-            // not really sure what to do here
+            /* if the connection has been dropped, the client will have to get hold of the credential when
+            they reconnect. Perhaps the 'resume session' handler should send (a) message(s) to re-establish state. */
             return;
         }
         await conn.QueueS2CMessage(new HazeS2CCredentialReadyMessage
