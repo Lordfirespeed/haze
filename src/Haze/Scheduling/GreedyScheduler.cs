@@ -1,9 +1,12 @@
+using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Haze.Models;
+using Haze.Steam;
 using Haze.Util;
+using HazeCommon.Messages;
 using HazeCommon.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -65,6 +68,32 @@ public class GreedySchedulingService(
             .FirstOrDefaultAsync(ct);
     }
 
+    protected async Task RefreshCredentialIfNecessary(
+        SteamAccountCredential credential,
+        HazeDbContext dbContext,
+        CancellationToken ct)
+    {
+        var lastSuccessfulRefresh = await dbContext.SteamAccountCredentialRefreshAttempts
+            .OrderByDescending(attempt => attempt.AttemptedAt)
+            .FirstOrDefaultAsync(attempt => attempt.CredentialId == credential.CredentialId && attempt.AccessTokenRefreshed, cancellationToken: ct);
+        if (lastSuccessfulRefresh is not null && DateTime.UtcNow - lastSuccessfulRefresh.AttemptedAt <= new TimeSpan(0, 5, 0)) return;
+
+        {
+            await using var connection = new SteamConnection(logger);
+            await connection.Connect();
+
+            connection.DbAuth(credential);
+            await connection.LogOn(); // this can raise exceptions
+            await connection.RefreshTokenSet();  // in theory, same here
+
+            Debug.Assert(connection.HasAuthenticated);
+            credential.SteamAccessToken = connection.TokenSet.AccessToken;
+            credential.SteamRefreshToken = connection.TokenSet.RefreshToken;
+        }
+
+        await dbContext.SaveChangesAsync(ct);
+    }
+
     protected async Task AttemptToStartJob(HazeClientJob job, HazeDbContext dbContext, CancellationToken ct)
     {
         Debug.Assert(job.State is HazeClientJobState.Pending);
@@ -92,10 +121,19 @@ public class GreedySchedulingService(
         job.State = HazeClientJobState.Running;
         job.PendingReasonCode = null;
         await dbContext.SaveChangesAsync(ct);
+        await RefreshCredentialIfNecessary(credential, dbContext, ct);
 
-        // todo: refresh the credential
-
-        // todo: transmit the credential to the client
+        var conn = connectionManager.GetConnection(job.OwnerSessionId);
+        if (conn is null) {
+            // not really sure what to do here
+            return;
+        }
+        await conn.QueueS2CMessage(new HazeS2CCredentialReadyMessage
+        {
+            AccountName = credential.Account.SteamAccountName,
+            AccessToken = credential.SteamAccessToken,
+            RefreshToken = credential.SteamRefreshToken,
+        }, ct);
         logger.LogInformation("heck yeah it's time to send the credential {}", credential.CredentialId);
     }
 }
