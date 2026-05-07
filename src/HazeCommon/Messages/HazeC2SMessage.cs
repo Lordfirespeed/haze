@@ -9,6 +9,7 @@ namespace HazeCommon.Messages;
 [JsonDerivedType(typeof(HazeC2SResumeSessionMessage), typeDiscriminator: "resume-session-v1")]
 [JsonDerivedType(typeof(HazeC2SEndSessionMessage), typeDiscriminator: "end-session-v1")]
 [JsonDerivedType(typeof(HazeC2SWhoAmIMessage), typeDiscriminator: "whoami-v1")]
+[JsonDerivedType(typeof(HazeC2SEnqueueJobMessage), typeDiscriminator: "enqueue-job-v1")]
 [JsonDerivedType(typeof(HazeC2SSteamQrAuthMessage), typeDiscriminator: "steam/qr-auth-v1")]
 public abstract class HazeC2SMessage
 {
