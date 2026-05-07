@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using Haze.Models;
 using Haze.Util;
 using Microsoft.Extensions.Logging;
 using SteamKit2;
@@ -135,6 +136,13 @@ public class SteamConnection : IAsyncDisposable
     {
         AccountName = accountName;
         TokenSet = tokenSet;
+        HasAuthenticated = true;
+    }
+
+    public void DbAuth(SteamAccountCredential credential)
+    {
+        AccountName = credential.Account.SteamAccountName;
+        TokenSet = new SteamTokenSet(credential.SteamAccessToken, credential.SteamRefreshToken);
         HasAuthenticated = true;
     }
 
