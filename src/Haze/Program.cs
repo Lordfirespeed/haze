@@ -16,7 +16,6 @@ builder.WebHost.ConfigureKestrel(options => {
     options.ListenAnyIP(5000);
 });
 builder.Services.AddControllers();
-builder.Services.AddDbContext<HazeDbContext>();
 builder.Services.AddDbContextFactory<HazeDbContext>();
 builder.Services.AddSingleton<HazeConnectionManager>();
 builder.Services.AddHostedService<GreedySchedulingService>();
