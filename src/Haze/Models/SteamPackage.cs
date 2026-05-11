@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 
 namespace Haze.Models;
@@ -10,6 +11,9 @@ namespace Haze.Models;
 public class SteamPackage
 {
     public uint SteamPackageId { get; set; }
+
+    [Required]
+    public uint LastChangeNumber { get; set; }
 
     /**
      * Packages are associated to Steam accounts via licenses.

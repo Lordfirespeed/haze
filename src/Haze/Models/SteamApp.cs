@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +12,9 @@ namespace Haze.Models;
 public class SteamApp
 {
     public uint SteamAppId { get; set; }
+
+    [Required]
+    public uint LastChangeNumber { get; set; }
 
     /**
      * Access to an app can be granted by potentially many packages.
