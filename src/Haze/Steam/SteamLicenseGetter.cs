@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Haze.Models;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 {
     private SteamAccount _account = null!;
 
-    public async Task Foo()
+    public async Task Foo(CancellationToken ct = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync();
         var cred = await dbContext.SteamAccountCredentials
@@ -27,7 +28,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
         using var onLicenseListCallback = connection.Manager.Subscribe<SteamApps.LicenseListCallback>(OnLicenseList);
         await connection.LogOn();
-        await Task.Delay(new TimeSpan(0, 0, 10, 0));
+        await Task.Delay(new TimeSpan(0, 0, 10, 0), ct);
     }
 
     public async Task OnLicenseList(SteamApps.LicenseListCallback callback)
