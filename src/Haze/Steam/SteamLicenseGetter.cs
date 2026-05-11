@@ -151,6 +151,20 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             await UpsertEntitlement(license);
         }
         await dbContext.SaveChangesAsync(ct);
+
+        await dbContext.SteamLicenses
+            .Where(license => license.Entitlements
+                .All(entitlement => entitlement.EntitledAccountId == entitleeFullId && entitlement.LastSeen < seenTime)
+            )
+            .ExecuteDeleteAsync(ct);
+        await dbContext.SteamLicenseEntitlements
+            .Where(entitlement => entitlement.EntitledAccountId == entitleeFullId)
+            .Where(entitlement => entitlement.LastSeen < seenTime)
+            .ExecuteDeleteAsync(ct);
+        await dbContext.SteamLicenses
+            .Where(license => license.OwnerAccountId == entitleeFullId)
+            .Where(license => license.LastSeen < seenTime)
+            .ExecuteDeleteAsync(ct);
         return;
 
         async Task UpsertAccount(SteamID accountId)
