@@ -17,10 +17,19 @@ async function afterOpen() {
   foo.send(JSON.stringify({"$type": "new-session-v1", "id": await makeMessageId()}))
   foo.send(JSON.stringify({"$type": "authenticate-v1", "id": await makeMessageId(), "client_id": "fancy-client", "client_secret": "381y/OIyef4kZnxlWEIno61x+cl1UFk+n2Gttonzu+jJN9GL5nsz9fxJDmOqXwPQ"}))
   foo.send(JSON.stringify({"$type": "whoami-v1", "id": await makeMessageId()}))
+  foo.send(JSON.stringify({"$type": "steam/qr-auth-v1", "credential_usage": 0, "id": await makeMessageId()}))
 }
 
 foo.addEventListener("message", function(event) {
   console.log(`message: ${event.data}`);
+  var message = JSON.parse(event.data);
+  if (message["$type"] === "steam/qr-auth-challenge-v1") {
+    var url = new URL("https://api.qrserver.com/v1/create-qr-code/")
+    url.searchParams.set("format", "svg")
+    url.searchParams.set("qzone", "4")
+    url.searchParams.set("data", message["challenge_url"])
+    console.log(url.toString())
+  }
 })
 foo.addEventListener("close", function(event) {
   console.log(`close: ${event.code}, ${event.reason}`)
