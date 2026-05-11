@@ -27,7 +27,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
         using var onLicenseListCallback = connection.Manager.Subscribe<SteamApps.LicenseListCallback>(OnLicenseList);
         await connection.LogOn();
-        await Task.Delay(1000);
+        await Task.Delay(new TimeSpan(0, 0, 10, 0));
     }
 
     public async Task OnLicenseList(SteamApps.LicenseListCallback callback)
