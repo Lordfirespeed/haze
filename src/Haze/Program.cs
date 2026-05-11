@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Haze;
 using Haze.Scheduling;
+using Haze.Steam;
 using Haze.Util;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -18,6 +19,7 @@ builder.WebHost.ConfigureKestrel(options => {
 builder.Services.AddControllers();
 builder.Services.AddDbContextFactory<HazeDbContext>();
 builder.Services.AddSingleton<HazeConnectionManager>();
+builder.Services.AddSingleton<SteamLicenseGetter>();
 builder.Services.AddHostedService<GreedySchedulingService>();
 
 builder.Configuration["Logging:LogLevel:Default"] = "Debug";
@@ -34,5 +36,6 @@ var cancel = (PosixSignalContext ctx) => cancellationSource.Cancel();
 using (PosixSignalRegistration.Create(PosixSignal.SIGINT, cancel))
 using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, cancel)) {
     var runTask = app.RunAsync(cancellationSource.Token);
+    await app.Services.GetService<SteamLicenseGetter>()!.Foo(cancellationSource.Token);
     await runTask;
 }
