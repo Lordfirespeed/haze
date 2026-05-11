@@ -73,16 +73,17 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
         connection.DbAuth(cred);
 
-        using var onLicenseListCallback = connection.Manager.Subscribe<SteamApps.LicenseListCallback>(
+        using var dbLicenseStuff = connection.Manager.Subscribe<SteamApps.LicenseListCallback>(
             async Task (callback) => {
                 await using var dbContext = await dbContextFactory.CreateDbContextAsync(ct);
                 try {
-                    await OnLicenseList(callback, dbContext, ct);
+                    await DatabaseLicenseListStuff(callback, dbContext, ct);
                 } catch (Exception exc) {
                     logger.LogError(exc, "Exception thrown in license list callback handler");
                 }
             }
         );
+        using var nonDbLicenseStuff = connection.Manager.Subscribe<SteamApps.LicenseListCallback>(NonDatabaseLicenseListStuff);
         await connection.LogOn();
 
         await _firstLicenseListTcs.Task;
@@ -107,18 +108,28 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
         }
     }
 
-    public async Task OnLicenseList(SteamApps.LicenseListCallback callback, HazeDbContext dbContext, CancellationToken ct = default)
+    public async Task NonDatabaseLicenseListStuff(SteamApps.LicenseListCallback callback)
+    {
+        logger.LogInformation($"Got a license list at {DateTime.Now} (local time)");
+        if (callback.Result is not EResult.OK) throw new Exception();
+
+        var packageTokens = new Dictionary<uint, ulong>();
+        foreach (var license in callback.LicenseList) {
+            if (license.AccessToken > 0) packageTokens[license.PackageID] = license.AccessToken;
+        }
+
+        _lastLicenseList = callback.LicenseList;
+        _packageTokens = packageTokens.ToImmutableDictionary();
+        if (!_firstLicenseListTcs.Task.IsCompleted) _firstLicenseListTcs.SetResult();
+    }
+
+    public async Task DatabaseLicenseListStuff(SteamApps.LicenseListCallback callback, HazeDbContext dbContext, CancellationToken ct = default)
     {
         logger.LogInformation($"Got a license list at {DateTime.Now} (local time)");
         if (callback.Result is not EResult.OK) throw new Exception();
 
         var entitleeFullId = _account.SteamAccountId;
         var seenTime = DateTime.UtcNow;
-
-        var packageTokens = new Dictionary<uint, ulong>();
-        foreach (var license in callback.LicenseList) {
-            if (license.AccessToken > 0) packageTokens[license.PackageID] = license.AccessToken;
-        }
 
         var uniqueOwners = callback.LicenseList
             .Select(license => license.GetOwnerFullId(entitleeFullId))
@@ -140,10 +151,6 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             await UpsertEntitlement(license);
         }
         await dbContext.SaveChangesAsync(ct);
-
-        _lastLicenseList = callback.LicenseList;
-        _packageTokens = packageTokens.ToImmutableDictionary();
-        if (!_firstLicenseListTcs.Task.IsCompleted) _firstLicenseListTcs.SetResult();
         return;
 
         async Task UpsertAccount(SteamID accountId)
