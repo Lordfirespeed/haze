@@ -14,7 +14,8 @@ public class SteamConnection : IAsyncDisposable
 {
     public SteamClient Client { get; }
     public CallbackManager Manager { get; }
-    public SteamUser User { get; }
+    public SteamUser User => field ??= Client.GetHandler<SteamUser>() ?? throw new InvalidOperationException();
+    public SteamApps Apps => field ??= Client.GetHandler<SteamApps>() ?? throw new InvalidOperationException();
 
     [MemberNotNullWhen(true, nameof(AccountName), nameof(TokenSet))]
     public bool HasAuthenticated { get; protected set; }
@@ -45,7 +46,6 @@ public class SteamConnection : IAsyncDisposable
         _logger = logger;
         Client = new SteamClient();
         Manager = new CallbackManager( Client );
-        User = Client.GetHandler<SteamUser>() ?? throw new InvalidOperationException();
         _subscriptions = [
             Manager.Subscribe<SteamClient.DisconnectedCallback>(OnDisconnected),
             Manager.Subscribe<SteamUser.LoggedOffCallback>(OnLoggedOff)
