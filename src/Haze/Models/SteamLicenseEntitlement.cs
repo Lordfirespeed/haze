@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,9 @@ public class SteamLicenseEntitlement
 
     [Required]
     public uint LicensePackageId { get; set; }
+
+    [Required]
+    public DateTime LastSeen { get; set; }
 
     [ForeignKey(nameof(EntitledAccountId))]
     public SteamAccount EntitledAccount { get; set; } = null!;

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -15,6 +16,9 @@ public class SteamLicense
 
     [Required]
     public uint PackageId { get; set; }
+
+    [Required]
+    public DateTime LastSeen { get; set; }
 
     [ForeignKey(nameof(OwnerAccountId))]
     [InverseProperty(nameof(SteamAccount.OwnedLicenses))]
