@@ -11,9 +11,8 @@ public class SteamAccount
 {
     public SteamID SteamAccountId { get; set; } = null!;
 
-    [Required]
     [StringLength(32)]
-    public string SteamAccountName { get; set; } = null!;
+    public string? SteamAccountName { get; set; }
 
     public ICollection<SteamAccountCredential> Credentials { get; } = new List<SteamAccountCredential>();
 
