@@ -51,7 +51,7 @@ public class SteamConnection : IAsyncDisposable
             Manager.Subscribe<SteamUser.LoggedOffCallback>(OnLoggedOff)
         ];
         _runManagerTask = Task.Run(() =>
-            Manager.RunForeverAsync(_runManagerCts.Token).IgnoreCancellationBy(_runManagerCts.Token),
+            Manager.RunForeverAsync(_runManagerCts.Token),
             _runManagerCts.Token
         );
     }
