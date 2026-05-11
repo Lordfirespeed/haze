@@ -92,7 +92,16 @@ public static class CallbackManagerExtensions
     ) {
         while (true) {
             cancellationToken.ThrowIfCancellationRequested();
-            await manager.RunWaitCallbackAsync(cancellationToken);
+            // for some reason, when `cancellationToken` gets canceled, RunWaitCallbackAsync raises a TaskCanceledException
+            // which refers to `(CancellationToken)default` instead of `cancellationToken`.
+            // to fix this, we catch canceled exceptions, throw our own if `cancellationToken` was canceled,
+            // and throw the original exception otherwise.
+            try {
+                await manager.RunWaitCallbackAsync(cancellationToken);
+            } catch (OperationCanceledException) {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw;
+            }
         }
         // ReSharper disable once FunctionNeverReturns
     }
