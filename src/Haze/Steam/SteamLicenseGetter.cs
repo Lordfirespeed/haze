@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Collections.ObjectModel;
-using System.Data.Common;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
@@ -13,7 +12,6 @@ using Haze.Util;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SteamKit2;
-using SteamKit2.GC.TF2.Internal;
 
 namespace Haze.Steam;
 
@@ -171,6 +169,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             .Where(license => license.LastSeen < seenTime)
             .ExecuteDeleteAsync(ct);
         await transaction.CommitAsync(ct);
+        logger.LogInformation("Done upserting accounts, packages, licenses, and entitlements");
         return;
 
         async Task UpsertAccount(SteamID accountId)
@@ -237,13 +236,15 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
         var packageRequests = _lastLicenseList
             .Select(license => license.PackageID)
             .Select(id => new SteamApps.PICSRequest(id, _packageTokens.TryGetValue(id, out var token) ? token : 0));
-        var resultSet = await connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
-        _packageInfoList = resultSet.Results!.SelectMany(result => result.Packages.Values)
+        var packageResultSet = await connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
+        _packageInfoList = packageResultSet.Results!.SelectMany(result => result.Packages.Values)
             .ToImmutableArray()
             .AsReadOnly();
 
         foreach (var package in _packageInfoList) {
-            var dbPackage = await dbContext.SteamPackages.FindAsync([package.ID], ct);
+            var dbPackage = await dbContext.SteamPackages
+                .Include(p => p.Depots)
+                .FirstOrDefaultAsync(p => p.SteamPackageId == package.ID, ct);
             Debug.Assert(dbPackage is not null);
             dbPackage.LastChangeNumber = package.ChangeNumber;
 
@@ -253,17 +254,98 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             foreach (var depotId in depotIds) {
                 var dbDepot = dbContext.SteamDepots.Local.FindEntry(depotId)?.Entity;
                 if (dbDepot is null) {
-                    dbDepot = await dbContext.SteamDepots
-                        .Include(depot => depot.Packages)
-                        .FirstOrDefaultAsync(depot => depot.SteamDepotId == depotId, ct);
+                    dbDepot = await dbContext.SteamDepots.FindAsync([depotId], ct);
                 }
                 if (dbDepot is null) {
                     dbDepot = new SteamDepot { SteamDepotId = depotId };
                     dbContext.SteamDepots.Add(dbDepot);
                 }
-                dbDepot.Packages.Add(dbPackage);
+                dbPackage.Depots.Add(dbDepot);
             }
         }
         await dbContext.SaveChangesAsync(ct);
+        logger.LogInformation("Done upserting depots and package <-> depot relations");
+
+        var toRequestAppIds = new HashSet<uint>();
+        foreach (var package in _packageInfoList) {
+            var appIds = package.KeyValues["appids"].Children.Select(child => child.AsUnsignedInteger());
+            toRequestAppIds.UnionWith(appIds);
+        }
+
+        var lastRefreshAttempt = await dbContext.SteamAccountProductInfoRefreshAttempts
+            .Where(attempt => attempt.SteamAccountId == _account.SteamAccountId)
+            .OrderByDescending(attempt => attempt.AttemptCompletedAt)
+            .FirstOrDefaultAsync(ct);
+
+        var appChanges = await connection.Apps.PICSGetChangesSince(lastRefreshAttempt?.LastChangeNumber ?? 0);
+        await ReduceToRequestAppIdSet(appChanges);
+
+        var appTokensResult = await connection.Apps.PICSGetAccessTokens(appIds: toRequestAppIds, packageIds: []);
+        _appTokens = appTokensResult.AppTokens.ToImmutableDictionary();
+        var appRequests = toRequestAppIds
+            .Select(id => new SteamApps.PICSRequest(id, _appTokens.TryGetValue(id, out var token) ? token : 0));
+        var appResultSet = await connection.Apps.PICSGetProductInfo(apps: appRequests, packages: []);
+        var appInfoList = appResultSet.Results!.SelectMany(result => result.Apps.Values)
+            .ToImmutableArray()
+            .AsReadOnly();
+        foreach (var app in appInfoList) {
+            await UpsertApp(app);
+        }
+        await dbContext.SaveChangesAsync(ct);
+        logger.LogInformation("Done upserting apps");
+
+        foreach (var package in _packageInfoList) {
+            var dbPackage = await dbContext.SteamPackages
+                .Include(p => p.Apps)
+                .FirstOrDefaultAsync(p => p.SteamPackageId == package.ID, ct);
+            Debug.Assert(dbPackage is not null);
+            var appIds = package.KeyValues["appids"].Children.Select(child => child.AsUnsignedInteger());
+            foreach (var appId in appIds) {
+                var dbApp = dbContext.SteamApps.Local.FindEntry(appId)?.Entity;
+                if (dbApp is null) {
+                    dbApp = await dbContext.SteamApps.FindAsync([appId], ct);
+                }
+                Debug.Assert(dbApp is not null);
+                dbPackage.Apps.Add(dbApp);
+            }
+        }
+        logger.LogInformation("Done creating package <-> app relations");
+        await dbContext.SaveChangesAsync(ct);
+
+        var attempt = new SteamAccountProductInfoRefreshAttempt {
+            SteamAccountId = _account.SteamAccountId,
+            AttemptStartedAt = DateTime.UtcNow, // temporary
+            AttemptCompletedAt = DateTime.UtcNow,
+            LastChangeNumber = appChanges.CurrentChangeNumber,
+        };
+        dbContext.SteamAccountProductInfoRefreshAttempts.Add(attempt);
+        await dbContext.SaveChangesAsync(ct);
+        logger.LogInformation("Done creating record of this product info refresh attempt");
+        return;
+
+        async Task UpsertApp(SteamApps.PICSProductInfoCallback.PICSProductInfo appInfo)
+        {
+            var dbApp = await dbContext.SteamApps.FindAsync([appInfo.ID], ct);
+            if (dbApp is null) {
+                dbApp = new SteamApp { SteamAppId = appInfo.ID };
+                dbContext.Add(dbApp);
+            }
+            dbApp.LastChangeNumber = appInfo.ChangeNumber;
+        }
+
+        async Task ReduceToRequestAppIdSet(SteamApps.PICSChangesCallback changes)
+        {
+            if (changes.RequiresFullUpdate || changes.RequiresFullAppUpdate) return;
+
+            var alreadyKnownApps = dbContext.SteamApps
+                .Where(app => toRequestAppIds.Contains(app.SteamAppId))
+                .AsAsyncEnumerable();
+            await foreach (var alreadyKnownApp in alreadyKnownApps.WithCancellation(ct)) {
+                toRequestAppIds.Remove(alreadyKnownApp.SteamAppId);
+            }
+            foreach (var (key, change) in changes.AppChanges) {
+                toRequestAppIds.Add(change.ID);
+            }
+        }
     }
 }
