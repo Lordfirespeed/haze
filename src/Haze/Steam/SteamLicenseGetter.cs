@@ -130,6 +130,8 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
         var entitleeFullId = _account.SteamAccountId;
         var seenTime = DateTime.UtcNow;
 
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(ct);
+
         var uniqueOwners = callback.LicenseList
             .Select(license => license.GetOwnerFullId(entitleeFullId))
             .ToImmutableHashSet();
@@ -164,6 +166,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             .Where(license => license.OwnerAccountId == entitleeFullId)
             .Where(license => license.LastSeen < seenTime)
             .ExecuteDeleteAsync(ct);
+        await transaction.CommitAsync(ct);
         return;
 
         async Task UpsertAccount(SteamID accountId)
