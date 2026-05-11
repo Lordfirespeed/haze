@@ -14,6 +14,8 @@ public class SteamAccount
     [StringLength(32)]
     public string? SteamAccountName { get; set; }
 
+    public ICollection<SteamAccountProductInfoRefreshAttempt> ProductInfoRefreshAttempts { get; set; } = new List<SteamAccountProductInfoRefreshAttempt>();
+
     public ICollection<SteamAccountCredential> Credentials { get; } = new List<SteamAccountCredential>();
 
     /**

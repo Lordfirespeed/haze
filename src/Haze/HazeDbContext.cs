@@ -17,6 +17,7 @@ public class HazeDbContext : DbContext
     public DbSet<SteamAccount> SteamAccounts { get; init; }
     public DbSet<SteamAccountCredential> SteamAccountCredentials { get; init; }
     public DbSet<SteamAccountCredentialRefreshAttempt> SteamAccountCredentialRefreshAttempts { get; init; }
+    public DbSet<SteamAccountProductInfoRefreshAttempt> SteamAccountProductInfoRefreshAttempts { get; init; }
     public DbSet<SteamLicense> SteamLicenses { get; init; }
     public DbSet<SteamPackage> SteamPackages { get; init; }
     public DbSet<SteamLicenseEntitlement> SteamLicenseEntitlements { get; init; }
