@@ -120,6 +120,32 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             if (license.AccessToken > 0) packageTokens[license.PackageID] = license.AccessToken;
         }
 
+        var uniqueOwners = callback.LicenseList
+            .Select(license => license.GetOwnerFullId(entitleeFullId))
+            .ToImmutableHashSet();
+        foreach (var owner in uniqueOwners) {
+            await UpsertAccount(owner);
+        }
+        foreach (var license in callback.LicenseList) {
+            await UpsertLicensePackage(license);
+        }
+        await dbContext.SaveChangesAsync(ct);
+
+        foreach (var license in callback.LicenseList) {
+            await UpsertLicense(license);
+        }
+        await dbContext.SaveChangesAsync(ct);
+
+        foreach (var license in callback.LicenseList) {
+            await UpsertEntitlement(license);
+        }
+        await dbContext.SaveChangesAsync(ct);
+
+        _lastLicenseList = callback.LicenseList;
+        _packageTokens = packageTokens.ToImmutableDictionary();
+        if (!_firstLicenseListTcs.Task.IsCompleted) _firstLicenseListTcs.SetResult();
+        return;
+
         async Task UpsertAccount(SteamID accountId)
         {
             if (accountId == entitleeFullId) return; // assume entitlee is already in the database
@@ -136,18 +162,8 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
             dbPackage = new SteamPackage { SteamPackageId = license.PackageID, LastChangeNumber = 0 };
             dbContext.SteamPackages.Add(dbPackage);
-        }
 
-        var uniqueOwners = callback.LicenseList
-            .Select(license => license.GetOwnerFullId(entitleeFullId))
-            .ToImmutableHashSet();
-        foreach (var owner in uniqueOwners) {
-            await UpsertAccount(owner);
         }
-        foreach (var license in callback.LicenseList) {
-            await UpsertLicensePackage(license);
-        }
-        await dbContext.SaveChangesAsync(ct);
 
         async Task UpsertLicense(SteamApps.LicenseListCallback.License license)
         {
@@ -166,11 +182,6 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             }
             dbLicense.LastSeen = seenTime;
         }
-
-        foreach (var license in callback.LicenseList) {
-            await UpsertLicense(license);
-        }
-        await dbContext.SaveChangesAsync(ct);
 
         async Task UpsertEntitlement(SteamApps.LicenseListCallback.License license)
         {
@@ -192,14 +203,5 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             }
             dbEntitlement.LastSeen = seenTime;
         }
-
-        foreach (var license in callback.LicenseList) {
-            await UpsertEntitlement(license);
-        }
-        await dbContext.SaveChangesAsync(ct);
-
-        _lastLicenseList = callback.LicenseList;
-        _packageTokens = packageTokens.ToImmutableDictionary();
-        if (!_firstLicenseListTcs.Task.IsCompleted) _firstLicenseListTcs.SetResult();
     }
 }
