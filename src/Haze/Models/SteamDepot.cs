@@ -10,6 +10,7 @@ namespace Haze.Models;
 [PrimaryKey(nameof(SteamDepotId))]
 public class SteamDepot
 {
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public uint SteamDepotId { get; set; }
 
     /**

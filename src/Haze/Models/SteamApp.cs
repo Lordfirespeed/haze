@@ -11,6 +11,7 @@ namespace Haze.Models;
 [PrimaryKey(nameof(SteamAppId))]
 public class SteamApp
 {
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public uint SteamAppId { get; set; }
 
     [Required]
