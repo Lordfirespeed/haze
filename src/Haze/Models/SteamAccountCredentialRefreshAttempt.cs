@@ -9,7 +9,8 @@ namespace Haze.Models;
 [PrimaryKey(nameof(AttemptId))]
 public class SteamAccountCredentialRefreshAttempt
 {
-    public ulong AttemptId { get; set; }
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public long AttemptId { get; set; }
 
     [Required]
     public DateTime AttemptedAt { get; set; }
@@ -27,7 +28,7 @@ public class SteamAccountCredentialRefreshAttempt
     public bool RefreshTokenRefreshed { get; set; }
 
     [Required]
-    public uint CredentialId { get; set; }
+    public int CredentialId { get; set; }
 
     [ForeignKey(nameof(CredentialId))]
     public SteamAccountCredential Credential { get; set; } = null!;

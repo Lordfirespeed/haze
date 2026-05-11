@@ -10,7 +10,7 @@ namespace Haze.Models;
 [PrimaryKey(nameof(CredentialId))]
 public class SteamAccountCredential
 {
-    public uint CredentialId { get; set; }
+    public int CredentialId { get; set; }
 
     [Required]
     public SteamAccountCredentialUsage Usage { get; set; }

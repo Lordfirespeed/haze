@@ -7,13 +7,13 @@ namespace Haze.Models;
 [PrimaryKey(nameof(AllocationId))]
 public class HazeCredentialAllocation
 {
-    public ulong AllocationId { get; set; }
+    public long AllocationId { get; set; }
 
     [Required]
-    public uint CredentialId { get; set; }
+    public int CredentialId { get; set; }
 
     [Required]
-    public ulong JobId { get; set; }
+    public long JobId { get; set; }
 
     [ForeignKey(nameof(CredentialId))]
     [InverseProperty(nameof(SteamAccountCredential.Allocations))]

@@ -9,7 +9,7 @@ namespace Haze.Models;
 [PrimaryKey(nameof(AttemptId))]
 public class SteamAccountProductInfoRefreshAttempt
 {
-    public ulong AttemptId { get; set; }
+    public long AttemptId { get; set; }
 
     [Required]
     public DateTime AttemptStartedAt { get; set; }

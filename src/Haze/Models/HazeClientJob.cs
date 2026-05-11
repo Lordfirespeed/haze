@@ -10,7 +10,7 @@ namespace Haze.Models;
 [PrimaryKey(nameof(JobId))]
 public class HazeClientJob
 {
-    public ulong JobId { get; set; }
+    public long JobId { get; set; }
 
     [Required]
     [StringLength(64)]

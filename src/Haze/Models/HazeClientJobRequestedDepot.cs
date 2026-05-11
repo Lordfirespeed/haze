@@ -10,7 +10,7 @@ namespace Haze.Models;
 [PrimaryKey(nameof(JobId), nameof(SteamDepotId))]
 public class HazeClientJobRequestedDepot
 {
-    public ulong JobId { get; set; }
+    public long JobId { get; set; }
 
     public uint SteamDepotId { get; set; }
 
