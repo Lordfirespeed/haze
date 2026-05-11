@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Collections.ObjectModel;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
@@ -10,14 +13,51 @@ using Haze.Util;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SteamKit2;
+using SteamKit2.GC.TF2.Internal;
 
 namespace Haze.Steam;
 
 public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactory, ILogger<SteamLicenseGetter> logger)
 {
     private SteamAccount _account = null!;
-    private ReadOnlyCollection<SteamApps.LicenseListCallback.License> _lastLicenseList = null!;
+
+    private ReadOnlyCollection<SteamApps.LicenseListCallback.License> _lastLicenseList = [];
+    private ImmutableDictionary<uint, ulong> _packageTokens = [];
     private readonly TaskCompletionSource _firstLicenseListTcs = new();
+
+    private ReadOnlyCollection<SteamApps.PICSProductInfoCallback.PICSProductInfo> _packageInfoList = [];
+
+    private ImmutableDictionary<uint, ulong> _appTokens = [];
+    private ImmutableDictionary<uint, byte[]> _depotKeys = [];
+
+
+    private async Task DumpPICSProductInfo(AsyncJobMultiple<SteamApps.PICSProductInfoCallback>.ResultSet resultSet, CancellationToken ct = default)
+    {
+        Debug.Assert(resultSet.Results is not null);
+        foreach (var (appId, appInfo) in resultSet.Results.SelectMany(result => result.Apps))
+        {
+            logger.LogInformation($"app {appId}, {await Checksum.Sha256SumObject(appInfo, ct)}");
+            logger.LogDebug(JsonSerializer.Serialize(appInfo));
+        }
+
+        foreach (var (packageId, packageInfo) in resultSet.Results.SelectMany(result => result.Packages))
+        {
+            logger.LogInformation($"package {packageId}, {await Checksum.Sha256SumObject(packageInfo, ct)}");
+            logger.LogDebug(JsonSerializer.Serialize(packageInfo));
+            ExtractPackageRelations(packageInfo);
+        }
+    }
+
+    private void ExtractPackageRelations(SteamApps.PICSProductInfoCallback.PICSProductInfo info)
+    {
+        var appIds = info.KeyValues["appids"].Children
+            .Select(child => child.AsUnsignedInteger())
+            .ToImmutableArray();
+        var depotIds = info.KeyValues["depotids"].Children
+            .Select(child => child.AsUnsignedInteger())
+            .ToImmutableArray();
+        logger.LogInformation("app IDs [{appIds}], depot IDs [{depotIds}]", appIds, depotIds);
+    }
 
     public async Task Foo(CancellationToken ct = default)
     {
@@ -33,60 +73,113 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
         connection.DbAuth(cred);
 
-        using var onLicenseListCallback = connection.Manager.Subscribe<SteamApps.LicenseListCallback>(OnLicenseList);
+        using var onLicenseListCallback = connection.Manager.Subscribe<SteamApps.LicenseListCallback>(
+            async Task (callback) => {
+                await using var dbContext = await dbContextFactory.CreateDbContextAsync(ct);
+                try {
+                    await OnLicenseList(callback, dbContext, ct);
+                } catch (Exception exc) {
+                    logger.LogError(exc, "Exception thrown in license list callback handler");
+                }
+            }
+        );
         await connection.LogOn();
 
         await _firstLicenseListTcs.Task;
 
         // ref: https://github.com/SteamRE/SteamKit/issues/531#issuecomment-377963355
-        var appRequest = new SteamApps.PICSRequest(1771300); // KCD2 app
-        var packageRequest = new SteamApps.PICSRequest(710154); // lethal company store package
-        var resultSet = await connection.Apps.PICSGetProductInfo(
-            apps: [appRequest],
-            packages: [packageRequest]
-        );
-        Debug.Assert(resultSet.Results is not null);
-        foreach (var (appId, appInfo) in resultSet.Results.SelectMany(result => result.Apps))
         {
-            logger.LogInformation($"app {appId}, only public: {appInfo.OnlyPublic}, {await Checksum.Sha256SumObject(appInfo, ct)}");
+            var packageRequests = _lastLicenseList
+                .Select(license => license.PackageID)
+                .Select(id => new SteamApps.PICSRequest(id, _packageTokens.TryGetValue(id, out var token) ? token : 0));
+            var resultSet = await connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
+            _packageInfoList = resultSet.Results!.SelectMany(result => result.Packages.Values)
+                .ToImmutableArray()
+                .AsReadOnly();
         }
 
-        foreach (var (packageId, packageInfo) in resultSet.Results.SelectMany(result => result.Packages))
         {
-            logger.LogInformation($"package {packageId}, only public: {packageInfo.OnlyPublic}, {await Checksum.Sha256SumObject(packageInfo, ct)}");
+            uint interestingAppId = 1966720;
+            var accessTokensResult = await connection.Apps.PICSGetAccessTokens([interestingAppId], []);
+            var appRequest = new SteamApps.PICSRequest(interestingAppId, accessTokensResult.AppTokens[interestingAppId]);
+            var resultSet = await connection.Apps.PICSGetProductInfo([appRequest], []);
+            await DumpPICSProductInfo(resultSet, ct);
         }
     }
 
-    public async Task OnLicenseList(SteamApps.LicenseListCallback callback)
+    public async Task OnLicenseList(SteamApps.LicenseListCallback callback, HazeDbContext dbContext, CancellationToken ct = default)
     {
         logger.LogInformation($"Got a license list at {DateTime.Now} (local time)");
         if (callback.Result is not EResult.OK) throw new Exception();
-        _lastLicenseList = callback.LicenseList;
-        if (!_firstLicenseListTcs.Task.IsCompleted) _firstLicenseListTcs.SetResult();
 
-        foreach (var license in callback.LicenseList)
-        {
-            if (license.PaymentMethod is EPaymentMethod.FamilyGroup)
-            {
-                var ownerId = new SteamID(license.OwnerAccountID, _account.SteamAccountId.AccountUniverse, EAccountType.Individual);
-                // do stuff with proper owner ID
-                continue;
+        var entitleeFullId = _account.SteamAccountId;
+        var seenTime = DateTime.UtcNow;
+        var packageTokens = new Dictionary<uint, ulong>();
+        foreach (var license in callback.LicenseList) {
+            if (license.AccessToken > 0) packageTokens[license.PackageID] = license.AccessToken;
+            var ownerFullId = license.GetOwnerFullId(_account.SteamAccountId);
+
+            if (!license.IsOwnedBy(entitleeFullId)) {
+                var dbOwner = await dbContext.SteamAccounts.FindAsync([ownerFullId], ct);
+                if (dbOwner is null) {
+                    dbOwner = new SteamAccount { SteamAccountId = ownerFullId };
+                    dbContext.SteamAccounts.Add(dbOwner);
+                }
             }
 
-            if (license.PaymentMethod is EPaymentMethod.CafeFunded) // this is a total guess!
-            {
-                var ownerId = new SteamID(license.OwnerAccountID, _account.SteamAccountId.AccountUniverse, EAccountType.Multiseat);
-                // do stuff with proper owner ID
-                continue;
+            var dbPackage = await dbContext.SteamPackages.FindAsync([license.PackageID], ct);
+            if (dbPackage is null) {
+                dbPackage = new SteamPackage
+                {
+                    SteamPackageId = license.PackageID, LastChangeNumber = 0,
+                };
+                dbContext.SteamPackages.Add(dbPackage);
             }
-
-            if (license.OwnerAccountID != _account.SteamAccountId.AccountID)
-            {
-                logger.LogDebug($"Shared license for package {license.PackageID} is owned by {license.OwnerAccountID} (expected {_account.SteamAccountId.AccountID}) with payment method {license.PaymentMethod}");
-                continue;
-            }
-
-            // logger.LogDebug($"license for package {license.PackageID}, owner {license.OwnerAccountID}, {license.PaymentMethod}");
         }
+        await dbContext.SaveChangesAsync(ct);
+
+        foreach (var license in callback.LicenseList) {
+            var ownerFullId = license.GetOwnerFullId(_account.SteamAccountId);
+
+            var dbLicense = await dbContext.SteamLicenses.FindAsync(
+                [ownerFullId, license.PackageID], ct
+            );
+            if (dbLicense is null) {
+                dbLicense = new SteamLicense {
+                    OwnerAccountId = ownerFullId, PackageId = license.PackageID,
+                };
+                var entry = dbContext.SteamLicenses.Add(dbLicense);
+                // change tracker thinks package ID is unset if the package ID is zero - force it to accept package ID
+                entry.Property(nameof(SteamLicense.PackageId)).CurrentValue = license.PackageID;
+            }
+            dbLicense.LastSeen = seenTime;
+        }
+        await dbContext.SaveChangesAsync(ct);
+
+        foreach (var license in callback.LicenseList) {
+            var ownerFullId = license.GetOwnerFullId(_account.SteamAccountId);
+
+            var dbEntitlement = await dbContext.SteamLicenseEntitlements.FindAsync(
+                [entitleeFullId, ownerFullId, license.PackageID], ct
+            );
+            if (dbEntitlement is null) {
+                dbEntitlement = new SteamLicenseEntitlement
+                {
+                    EntitledAccountId = entitleeFullId,
+                    LicenseOwnerAccountId = ownerFullId,
+                    LicensePackageId = license.PackageID,
+                };
+                var entry = dbContext.SteamLicenseEntitlements.Add(dbEntitlement);
+                // change tracker thinks package ID is unset if the package ID is zero - force it to accept package ID
+                entry.Property(nameof(SteamLicenseEntitlement.LicensePackageId)).CurrentValue = license.PackageID;
+            }
+
+            dbEntitlement.LastSeen = seenTime;
+        }
+        await dbContext.SaveChangesAsync(ct);
+
+        _lastLicenseList = callback.LicenseList;
+        _packageTokens = packageTokens.ToImmutableDictionary();
+        if (!_firstLicenseListTcs.Task.IsCompleted) _firstLicenseListTcs.SetResult();
     }
 }
