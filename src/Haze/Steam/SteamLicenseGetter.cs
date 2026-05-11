@@ -114,31 +114,43 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
         var entitleeFullId = _account.SteamAccountId;
         var seenTime = DateTime.UtcNow;
+
         var packageTokens = new Dictionary<uint, ulong>();
         foreach (var license in callback.LicenseList) {
             if (license.AccessToken > 0) packageTokens[license.PackageID] = license.AccessToken;
-            var ownerFullId = license.GetOwnerFullId(_account.SteamAccountId);
+        }
 
-            if (!license.IsOwnedBy(entitleeFullId)) {
-                var dbOwner = await dbContext.SteamAccounts.FindAsync([ownerFullId], ct);
-                if (dbOwner is null) {
-                    dbOwner = new SteamAccount { SteamAccountId = ownerFullId };
-                    dbContext.SteamAccounts.Add(dbOwner);
-                }
-            }
+        async Task UpsertAccount(SteamID accountId)
+        {
+            if (accountId == entitleeFullId) return; // assume entitlee is already in the database
+            var dbOwner = await dbContext.SteamAccounts.FindAsync([accountId], ct);
+            if (dbOwner is not null) return;
+            dbOwner = new SteamAccount { SteamAccountId = accountId };
+            dbContext.SteamAccounts.Add(dbOwner);
+        }
 
+        async Task UpsertLicensePackage(SteamApps.LicenseListCallback.License license)
+        {
             var dbPackage = await dbContext.SteamPackages.FindAsync([license.PackageID], ct);
-            if (dbPackage is null) {
-                dbPackage = new SteamPackage
-                {
-                    SteamPackageId = license.PackageID, LastChangeNumber = 0,
-                };
-                dbContext.SteamPackages.Add(dbPackage);
-            }
+            if (dbPackage is not null) return;
+
+            dbPackage = new SteamPackage { SteamPackageId = license.PackageID, LastChangeNumber = 0 };
+            dbContext.SteamPackages.Add(dbPackage);
+        }
+
+        var uniqueOwners = callback.LicenseList
+            .Select(license => license.GetOwnerFullId(entitleeFullId))
+            .ToImmutableHashSet();
+        foreach (var owner in uniqueOwners) {
+            await UpsertAccount(owner);
+        }
+        foreach (var license in callback.LicenseList) {
+            await UpsertLicensePackage(license);
         }
         await dbContext.SaveChangesAsync(ct);
 
-        foreach (var license in callback.LicenseList) {
+        async Task UpsertLicense(SteamApps.LicenseListCallback.License license)
+        {
             var ownerFullId = license.GetOwnerFullId(_account.SteamAccountId);
 
             var dbLicense = await dbContext.SteamLicenses.FindAsync(
@@ -154,9 +166,14 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             }
             dbLicense.LastSeen = seenTime;
         }
-        await dbContext.SaveChangesAsync(ct);
 
         foreach (var license in callback.LicenseList) {
+            await UpsertLicense(license);
+        }
+        await dbContext.SaveChangesAsync(ct);
+
+        async Task UpsertEntitlement(SteamApps.LicenseListCallback.License license)
+        {
             var ownerFullId = license.GetOwnerFullId(_account.SteamAccountId);
 
             var dbEntitlement = await dbContext.SteamLicenseEntitlements.FindAsync(
@@ -173,8 +190,11 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
                 // change tracker thinks package ID is unset if the package ID is zero - force it to accept package ID
                 entry.Property(nameof(SteamLicenseEntitlement.LicensePackageId)).CurrentValue = license.PackageID;
             }
-
             dbEntitlement.LastSeen = seenTime;
+        }
+
+        foreach (var license in callback.LicenseList) {
+            await UpsertEntitlement(license);
         }
         await dbContext.SaveChangesAsync(ct);
 
