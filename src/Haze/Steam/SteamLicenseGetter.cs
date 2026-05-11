@@ -32,6 +32,8 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
     public async Task OnLicenseList(SteamApps.LicenseListCallback callback)
     {
+        logger.LogInformation($"Got a license list at {DateTime.Now} (local time)");
+
         foreach (var license in callback.LicenseList)
         {
             if (license.PaymentMethod is EPaymentMethod.FamilyGroup)
@@ -54,7 +56,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
                 continue;
             }
 
-            logger.LogDebug($"license for package {license.PackageID}, owner {license.OwnerAccountID}, {license.PaymentMethod}");
+            // logger.LogDebug($"license for package {license.PackageID}, owner {license.OwnerAccountID}, {license.PaymentMethod}");
         }
     }
 }
