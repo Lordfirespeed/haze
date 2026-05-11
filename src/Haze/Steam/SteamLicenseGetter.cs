@@ -125,7 +125,6 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
     public async Task DatabaseLicenseListStuff(SteamApps.LicenseListCallback callback, HazeDbContext dbContext, CancellationToken ct = default)
     {
-        logger.LogInformation($"Got a license list at {DateTime.Now} (local time)");
         if (callback.Result is not EResult.OK) throw new Exception();
 
         var entitleeFullId = _account.SteamAccountId;
