@@ -77,13 +77,14 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             async Task (callback) => {
                 await using var dbContext = await dbContextFactory.CreateDbContextAsync(ct);
                 try {
+                    await NonDatabaseLicenseListStuff(callback);
                     await DatabaseLicenseListStuff(callback, dbContext, ct);
+                    await ProductInfoStuff(connection, dbContext, ct);
                 } catch (Exception exc) {
                     logger.LogError(exc, "Exception thrown in license list callback handler");
                 }
             }
         );
-        using var nonDbLicenseStuff = connection.Manager.Subscribe<SteamApps.LicenseListCallback>(NonDatabaseLicenseListStuff);
         await connection.LogOn();
 
         await _firstLicenseListTcs.Task;
@@ -97,6 +98,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             _packageInfoList = resultSet.Results!.SelectMany(result => result.Packages.Values)
                 .ToImmutableArray()
                 .AsReadOnly();
+            await DumpPICSProductInfo(resultSet, ct);
         }
 
         {
@@ -106,6 +108,8 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             var resultSet = await connection.Apps.PICSGetProductInfo([appRequest], []);
             await DumpPICSProductInfo(resultSet, ct);
         }
+
+        await Task.Delay(new TimeSpan(0, 0, 10, 0), ct);
     }
 
     public async Task NonDatabaseLicenseListStuff(SteamApps.LicenseListCallback callback)
@@ -226,5 +230,40 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             }
             dbEntitlement.LastSeen = seenTime;
         }
+    }
+
+    public async Task ProductInfoStuff(SteamConnection connection, HazeDbContext dbContext, CancellationToken ct = default)
+    {
+        var packageRequests = _lastLicenseList
+            .Select(license => license.PackageID)
+            .Select(id => new SteamApps.PICSRequest(id, _packageTokens.TryGetValue(id, out var token) ? token : 0));
+        var resultSet = await connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
+        _packageInfoList = resultSet.Results!.SelectMany(result => result.Packages.Values)
+            .ToImmutableArray()
+            .AsReadOnly();
+
+        foreach (var package in _packageInfoList) {
+            var dbPackage = await dbContext.SteamPackages.FindAsync([package.ID], ct);
+            Debug.Assert(dbPackage is not null);
+            dbPackage.LastChangeNumber = package.ChangeNumber;
+
+            var depotIds = package.KeyValues["depotids"].Children
+                .Select(child => child.AsUnsignedInteger())
+                .ToImmutableArray();
+            foreach (var depotId in depotIds) {
+                var dbDepot = dbContext.SteamDepots.Local.FindEntry(depotId)?.Entity;
+                if (dbDepot is null) {
+                    dbDepot = await dbContext.SteamDepots
+                        .Include(depot => depot.Packages)
+                        .FirstOrDefaultAsync(depot => depot.SteamDepotId == depotId, ct);
+                }
+                if (dbDepot is null) {
+                    dbDepot = new SteamDepot { SteamDepotId = depotId };
+                    dbContext.SteamDepots.Add(dbDepot);
+                }
+                dbDepot.Packages.Add(dbPackage);
+            }
+        }
+        await dbContext.SaveChangesAsync(ct);
     }
 }
