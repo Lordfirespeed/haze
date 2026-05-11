@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
 namespace Haze.Models;
@@ -10,6 +11,7 @@ namespace Haze.Models;
 [PrimaryKey(nameof(SteamPackageId))]
 public class SteamPackage
 {
+    [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public uint SteamPackageId { get; set; }
 
     [Required]
