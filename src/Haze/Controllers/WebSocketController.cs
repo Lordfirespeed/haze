@@ -11,6 +11,7 @@ using Haze.Util;
 using HazeCommon.Messages;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TaskExtensions = Haze.Util.TaskExtensions;
 
@@ -19,6 +20,7 @@ namespace Haze.Controllers;
 [ApiController]
 public class WebSocketController : HazeControllerBase<WebSocketController>
 {
+    private readonly IHostApplicationLifetime _appLifetime;
     private readonly HazeConnectionManager _connectionManager;
 
     private readonly Dictionary<Type, IHazeC2SMessageHandler> _handlerCache = new();
@@ -47,8 +49,14 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
         FullMode = BoundedChannelFullMode.Wait,
     };
 
-    public WebSocketController(ILogger<WebSocketController> logger, HazeDbContext dbContext, HazeConnectionManager connectionManager) : base(logger, dbContext)
+    public WebSocketController(
+        ILogger<WebSocketController> logger,
+        HazeDbContext dbContext,
+        IHostApplicationLifetime appLifetime,
+        HazeConnectionManager connectionManager
+    ) : base(logger, dbContext)
     {
+        _appLifetime = appLifetime;
         _connectionManager = connectionManager;
         _handlers = [
             new HazeC2SAuthenticateHandler(_dbContext, _logger),
@@ -70,17 +78,26 @@ public class WebSocketController : HazeControllerBase<WebSocketController>
 
         using var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
         var hazeWebSocket = new HazeWebSocket(webSocket, _logger);
-        await Handle(hazeWebSocket);
+        await Handle(hazeWebSocket, HttpContext.RequestAborted);
         return Empty;
     }
 
     private async Task Handle(HazeWebSocket webSocket, CancellationToken ct = default)
     {
-        CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var queue = Channel.CreateBounded<HazeS2CMessage>(ChannelOptions);
 
-        var receiveLoopTask = Task.Run(() => ReceiveLoop(webSocket, queue, cts.Token));
-        var sendLoopTask = Task.Run(() => SendLoop(webSocket, queue, cts.Token));
+        async Task OnAppStopping() {
+            try {
+                await webSocket.Close(WebSocketCloseStatus.EndpointUnavailable, "server closed", cts.Token);
+            } finally {
+                await cts.CancelAsync();
+            }
+        }
+        await using var stoppingRegistration = _appLifetime.ApplicationStopping.Register(() => Task.Run(OnAppStopping, cts.Token));
+
+        var receiveLoopTask = Task.Run(() => ReceiveLoop(webSocket, queue, cts.Token), cts.Token);
+        var sendLoopTask = Task.Run(() => SendLoop(webSocket, queue, cts.Token), cts.Token);
 
         try {
             await TaskExtensions.Group([receiveLoopTask, sendLoopTask], cts);
