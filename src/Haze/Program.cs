@@ -34,7 +34,7 @@ WebApplication BuildApp() {
     return app;
 }
 
-var cancellationSource = new CancellationTokenSource();
+using var cancellationSource = new CancellationTokenSource();
 var cancel = (PosixSignalContext ctx) => cancellationSource.Cancel();
 using (PosixSignalRegistration.Create(PosixSignal.SIGINT, cancel))
 using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, cancel))

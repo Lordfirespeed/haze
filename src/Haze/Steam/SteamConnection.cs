@@ -119,7 +119,7 @@ public class SteamConnection : IAsyncDisposable
         authSession.ChallengeURLChanged += NotifyChallengeUrlAndForget;
         await notifyChallengeUrl(authSession);
 
-        var authResultTaskCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var authResultTaskCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var authResultTask = authSession.PollingWaitForResultAsync(authResultTaskCts.Token);
         await Task.WhenAny(authResultTask, _disconnectedTaskSource.Task);
         if (!authResultTask.IsCompleted) {

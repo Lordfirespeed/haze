@@ -20,6 +20,7 @@ public static class CallbackManagerExtensions
             if (_disposed) return;
             cts.Cancel();
             disposable?.Dispose();
+            cts.Dispose();
             _disposed = true;
         }
     }
