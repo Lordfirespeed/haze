@@ -3,6 +3,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Haze;
 using Haze.Scheduling;
 using Haze.Steam;
@@ -10,7 +11,6 @@ using Haze.Util;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 WebApplication BuildApp() {
     var builder = WebApplication.CreateSlimBuilder();
@@ -40,7 +40,8 @@ using (PosixSignalRegistration.Create(PosixSignal.SIGINT, cancel))
 using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, cancel))
 await using (var app = BuildApp())
 {
-    var runTask = app.RunAsync(cancellationSource.Token);
-    await app.Services.GetService<SteamLicenseGetter>()!.Foo(cancellationSource.Token);
-    await runTask;
+    await app.StartAsync(cancellationSource.Token);
+    //await app.Services.GetService<SteamLicenseGetter>()!.Foo(cancellationSource.Token);
+    await Task.Delay(-1, cancellationSource.Token).IgnoreCancellationBy(cancellationSource.Token);
+    await app.StopAsync(cancellationSource.Token);
 }
