@@ -62,7 +62,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(ct);
         var cred = await dbContext.SteamAccountCredentials
             .Include(cred => cred.Account)
-            .FirstOrDefaultAsync(cred => cred.CredentialId == 2, cancellationToken: ct);
+            .FirstOrDefaultAsync(cred => cred.CredentialId == 1, cancellationToken: ct);
         if (cred is null) throw new InvalidOperationException();
         _account = cred.Account;
 
@@ -254,13 +254,14 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             .AsReadOnly();
 
         foreach (var package in _packageInfoList) {
+            if (!toUpdatePackageIds.Contains(package.ID)) continue;
+
             var dbPackage = await dbContext.SteamPackages
                 .Include(p => p.Depots)
                 .FirstOrDefaultAsync(p => p.SteamPackageId == package.ID, ct);
             Debug.Assert(dbPackage is not null);
             dbPackage.LastChangeNumber = package.ChangeNumber;
 
-            if (!toUpdatePackageIds.Contains(dbPackage.SteamPackageId)) continue;
             var depotIds = package.KeyValues["depotids"].Children
                 .Select(child => child.AsUnsignedInteger())
                 .ToImmutableArray();
@@ -301,6 +302,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
         logger.LogInformation("Done upserting apps");
 
         foreach (var package in _packageInfoList) {
+            if (!toUpdatePackageIds.Contains(package.ID)) continue;
             var dbPackage = await dbContext.SteamPackages
                 .Include(p => p.Apps)
                 .FirstOrDefaultAsync(p => p.SteamPackageId == package.ID, ct);
