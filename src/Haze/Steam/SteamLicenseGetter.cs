@@ -233,6 +233,8 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
     public async Task ProductInfoStuff(SteamConnection connection, HazeDbContext dbContext, CancellationToken ct = default)
     {
+        var refreshStartedAt = DateTime.UtcNow;
+
         var lastRefreshAttempt = await dbContext.SteamAccountProductInfoRefreshAttempts
             .Where(attempt => attempt.SteamAccountId == _account.SteamAccountId)
             .OrderByDescending(attempt => attempt.AttemptCompletedAt)
@@ -322,7 +324,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
         var attempt = new SteamAccountProductInfoRefreshAttempt {
             SteamAccountId = _account.SteamAccountId,
-            AttemptStartedAt = DateTime.UtcNow, // temporary
+            AttemptStartedAt = refreshStartedAt,
             AttemptCompletedAt = DateTime.UtcNow,
             LastChangeNumber = changes.CurrentChangeNumber,
         };
