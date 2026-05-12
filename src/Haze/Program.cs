@@ -43,5 +43,5 @@ await using (var app = BuildApp())
     await app.StartAsync(cancellationSource.Token);
     //await app.Services.GetService<SteamLicenseGetter>()!.Foo(cancellationSource.Token);
     await Task.Delay(-1, cancellationSource.Token).IgnoreCancellationBy(cancellationSource.Token);
-    await app.StopAsync(cancellationSource.Token);
+    await app.StopAsync(CancellationToken.None);
 }
