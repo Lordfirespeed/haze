@@ -233,6 +233,18 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
     public async Task ProductInfoStuff(SteamConnection connection, HazeDbContext dbContext, CancellationToken ct = default)
     {
+        var lastRefreshAttempt = await dbContext.SteamAccountProductInfoRefreshAttempts
+            .Where(attempt => attempt.SteamAccountId == _account.SteamAccountId)
+            .OrderByDescending(attempt => attempt.AttemptCompletedAt)
+            .FirstOrDefaultAsync(ct);
+        var changes = await connection.Apps.PICSGetChangesSince(
+            lastRefreshAttempt?.LastChangeNumber ?? 0,
+            sendAppChangelist: true,
+            sendPackageChangelist: true
+        );
+        var toUpdatePackageIds = _lastLicenseList.Select(license => license.PackageID).ToHashSet();
+        await ReduceToUpdatePackageIdSet(changes);
+
         var packageRequests = _lastLicenseList
             .Select(license => license.PackageID)
             .Select(id => new SteamApps.PICSRequest(id, _packageTokens.TryGetValue(id, out var token) ? token : 0));
@@ -248,6 +260,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             Debug.Assert(dbPackage is not null);
             dbPackage.LastChangeNumber = package.ChangeNumber;
 
+            if (!toUpdatePackageIds.Contains(dbPackage.SteamPackageId)) continue;
             var depotIds = package.KeyValues["depotids"].Children
                 .Select(child => child.AsUnsignedInteger())
                 .ToImmutableArray();
@@ -271,14 +284,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             var appIds = package.KeyValues["appids"].Children.Select(child => child.AsUnsignedInteger());
             toRequestAppIds.UnionWith(appIds);
         }
-
-        var lastRefreshAttempt = await dbContext.SteamAccountProductInfoRefreshAttempts
-            .Where(attempt => attempt.SteamAccountId == _account.SteamAccountId)
-            .OrderByDescending(attempt => attempt.AttemptCompletedAt)
-            .FirstOrDefaultAsync(ct);
-
-        var appChanges = await connection.Apps.PICSGetChangesSince(lastRefreshAttempt?.LastChangeNumber ?? 0);
-        await ReduceToRequestAppIdSet(appChanges);
+        await ReduceToRequestAppIdSet(changes);
 
         var appTokensResult = await connection.Apps.PICSGetAccessTokens(appIds: toRequestAppIds, packageIds: []);
         _appTokens = appTokensResult.AppTokens.ToImmutableDictionary();
@@ -316,7 +322,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
             SteamAccountId = _account.SteamAccountId,
             AttemptStartedAt = DateTime.UtcNow, // temporary
             AttemptCompletedAt = DateTime.UtcNow,
-            LastChangeNumber = appChanges.CurrentChangeNumber,
+            LastChangeNumber = changes.CurrentChangeNumber,
         };
         dbContext.SteamAccountProductInfoRefreshAttempts.Add(attempt);
         await dbContext.SaveChangesAsync(ct);
@@ -331,6 +337,16 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
                 dbContext.Add(dbApp);
             }
             dbApp.LastChangeNumber = appInfo.ChangeNumber;
+        }
+
+        async Task ReduceToUpdatePackageIdSet(SteamApps.PICSChangesCallback changes)
+        {
+            if (changes.RequiresFullUpdate || changes.RequiresFullPackageUpdate) return;
+
+            toUpdatePackageIds.Clear();
+            foreach (var (key, change) in changes.PackageChanges) {
+                toUpdatePackageIds.Add(change.ID);
+            }
         }
 
         async Task ReduceToRequestAppIdSet(SteamApps.PICSChangesCallback changes)
