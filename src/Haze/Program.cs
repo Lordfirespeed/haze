@@ -37,8 +37,9 @@ WebApplication BuildApp() {
 var cancellationSource = new CancellationTokenSource();
 var cancel = (PosixSignalContext ctx) => cancellationSource.Cancel();
 using (PosixSignalRegistration.Create(PosixSignal.SIGINT, cancel))
-using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, cancel)) {
-    await using var app = BuildApp();
+using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, cancel))
+await using (var app = BuildApp())
+{
     var runTask = app.RunAsync(cancellationSource.Token);
     await app.Services.GetService<SteamLicenseGetter>()!.Foo(cancellationSource.Token);
     await runTask;
