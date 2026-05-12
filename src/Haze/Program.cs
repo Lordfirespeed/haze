@@ -12,29 +12,33 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-var builder = WebApplication.CreateSlimBuilder();
-builder.WebHost.ConfigureKestrel(options => {
-    options.ListenAnyIP(5000);
-});
-builder.Services.AddControllers();
-builder.Services.AddDbContextFactory<HazeDbContext>();
-builder.Services.AddSingleton<HazeConnectionManager>();
-builder.Services.AddSingleton<SteamLicenseGetter>();
-builder.Services.AddHostedService<GreedySchedulingService>();
+WebApplication BuildApp() {
+    var builder = WebApplication.CreateSlimBuilder();
+    builder.WebHost.ConfigureKestrel(options => {
+        options.ListenAnyIP(5000);
+    });
+    builder.Services.AddControllers();
+    builder.Services.AddDbContextFactory<HazeDbContext>();
+    builder.Services.AddSingleton<HazeConnectionManager>();
+    builder.Services.AddSingleton<SteamLicenseGetter>();
+    builder.Services.AddHostedService<GreedySchedulingService>();
 
-builder.Configuration["Logging:LogLevel:Default"] = "Debug";
+    builder.Configuration["Logging:LogLevel:Default"] = "Debug";
 
-var app = builder.Build();
-app.UseWebSockets(new WebSocketOptions {
-    KeepAliveInterval = TimeSpan.FromSeconds(10),
-    KeepAliveTimeout = TimeSpan.FromSeconds(10),
-});
-app.MapControllers();
+    var app = builder.Build();
+    app.UseWebSockets(new WebSocketOptions {
+        KeepAliveInterval = TimeSpan.FromSeconds(10),
+        KeepAliveTimeout = TimeSpan.FromSeconds(10),
+    });
+    app.MapControllers();
+    return app;
+}
 
 var cancellationSource = new CancellationTokenSource();
 var cancel = (PosixSignalContext ctx) => cancellationSource.Cancel();
 using (PosixSignalRegistration.Create(PosixSignal.SIGINT, cancel))
 using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, cancel)) {
+    await using var app = BuildApp();
     var runTask = app.RunAsync(cancellationSource.Token);
     await app.Services.GetService<SteamLicenseGetter>()!.Foo(cancellationSource.Token);
     await runTask;
