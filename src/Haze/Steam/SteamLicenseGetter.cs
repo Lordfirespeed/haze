@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -87,6 +88,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
 
         await _firstLicenseListTcs.Task;
 
+
         // ref: https://github.com/SteamRE/SteamKit/issues/531#issuecomment-377963355
         {
             var packageRequests = _lastLicenseList
@@ -102,12 +104,16 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
         {
             uint interestingAppId = 1966720;
             var accessTokensResult = await connection.Apps.PICSGetAccessTokens([interestingAppId], []);
+            if (accessTokensResult.AppTokensDenied.Contains(interestingAppId)) {
+                throw new Exception("oof you got rejected mate");
+            }
             var appRequest = new SteamApps.PICSRequest(interestingAppId, accessTokensResult.AppTokens[interestingAppId]);
             var resultSet = await connection.Apps.PICSGetProductInfo([appRequest], []);
             await DumpPICSProductInfo(resultSet, ct);
         }
 
-        await Task.Delay(new TimeSpan(0, 0, 10, 0), ct);
+
+        await Task.Delay(Timeout.Infinite, ct);
     }
 
     public async Task NonDatabaseLicenseListStuff(SteamApps.LicenseListCallback callback)
@@ -119,6 +125,9 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
         foreach (var license in callback.LicenseList) {
             if (license.AccessToken > 0) packageTokens[license.PackageID] = license.AccessToken;
         }
+
+        await using var handle = File.OpenWrite($"license-list-{DateTime.Now:o}");
+        await JsonSerializer.SerializeAsync(handle, callback);
 
         _lastLicenseList = callback.LicenseList;
         _packageTokens = packageTokens.ToImmutableDictionary();
