@@ -47,6 +47,9 @@
         <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="$(DotNetPackageVersionFloat)" />
         <PackageVersion Include="Npgsql" Version="$(DotNetPackageVersionFloat)" />
         <!-- End EntityFramework -->
+
+        <!-- https://github.com/dotnet/efcore/issues/26042#issuecomment-4320084026 -->
+        <PackageVersion Include="EntityFrameworkCore.Locking.PostgreSQL" Version="[0.4.*, 0.5.0)" />
     </ItemGroup>
 
 </Project>

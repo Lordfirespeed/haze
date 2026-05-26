@@ -9,6 +9,8 @@
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+        <!-- https://github.com/dotnet/efcore/issues/26042#issuecomment-4320084026 -->
+        <PackageReference Include="EntityFrameworkCore.Locking.PostgreSQL" />
         <PackageReference Include="Mono.Posix" />
         <PackageReference Include="SteamKit2" />
         <PackageReference Include="System.Linq.Async" />
