@@ -12,6 +12,7 @@ using Haze.Models;
 using Haze.Util;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql.EntityFrameworkCore.PostgreSQL;
 using SteamKit2;
 
 namespace Haze.Steam;
@@ -77,7 +78,7 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
                 await using var dbContext = await dbContextFactory.CreateDbContextAsync(ct);
                 try {
                     await NonDatabaseLicenseListStuff(callback);
-                    var licenseListStuffStrategy = dbContext.Database.CreateExecutionStrategy();
+                    var licenseListStuffStrategy = new NpgsqlRetryingExecutionStrategy(dbContext, 2);
                     await licenseListStuffStrategy.ExecuteAsync(() => DatabaseLicenseListStuff(callback, dbContext, ct));
                     await ProductInfoStuff(connection, dbContext, ct);
                 } catch (Exception exc) {
