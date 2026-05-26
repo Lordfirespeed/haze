@@ -77,7 +77,8 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
                 await using var dbContext = await dbContextFactory.CreateDbContextAsync(ct);
                 try {
                     await NonDatabaseLicenseListStuff(callback);
-                    await DatabaseLicenseListStuff(callback, dbContext, ct);
+                    var licenseListStuffStrategy = dbContext.Database.CreateExecutionStrategy();
+                    await licenseListStuffStrategy.ExecuteAsync(() => DatabaseLicenseListStuff(callback, dbContext, ct));
                     await ProductInfoStuff(connection, dbContext, ct);
                 } catch (Exception exc) {
                     logger.LogError(exc, "Exception thrown in license list callback handler");
@@ -142,43 +143,47 @@ public class SteamLicenseGetter(IDbContextFactory<HazeDbContext> dbContextFactor
         var seenTime = DateTime.UtcNow;
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(ct);
+        try {
+            var uniqueOwners = callback.LicenseList
+                .Select(license => license.GetOwnerFullId(entitleeFullId))
+                .ToImmutableHashSet();
+            foreach (var owner in uniqueOwners) {
+                await UpsertAccount(owner);
+            }
+            foreach (var license in callback.LicenseList) {
+                await UpsertLicensePackage(license);
+            }
+            await dbContext.SaveChangesAsync(ct);
 
-        var uniqueOwners = callback.LicenseList
-            .Select(license => license.GetOwnerFullId(entitleeFullId))
-            .ToImmutableHashSet();
-        foreach (var owner in uniqueOwners) {
-            await UpsertAccount(owner);
-        }
-        foreach (var license in callback.LicenseList) {
-            await UpsertLicensePackage(license);
-        }
-        await dbContext.SaveChangesAsync(ct);
+            foreach (var license in callback.LicenseList) {
+                await UpsertLicense(license);
+            }
+            await dbContext.SaveChangesAsync(ct);
 
-        foreach (var license in callback.LicenseList) {
-            await UpsertLicense(license);
-        }
-        await dbContext.SaveChangesAsync(ct);
+            foreach (var license in callback.LicenseList) {
+                await UpsertEntitlement(license);
+            }
+            await dbContext.SaveChangesAsync(ct);
 
-        foreach (var license in callback.LicenseList) {
-            await UpsertEntitlement(license);
+            await dbContext.SteamLicenses
+                .Where(license => license.Entitlements
+                    .All(entitlement => entitlement.EntitledAccountId == entitleeFullId && entitlement.LastSeen < seenTime)
+                )
+                .ExecuteDeleteAsync(ct);
+            await dbContext.SteamLicenseEntitlements
+                .Where(entitlement => entitlement.EntitledAccountId == entitleeFullId)
+                .Where(entitlement => entitlement.LastSeen < seenTime)
+                .ExecuteDeleteAsync(ct);
+            await dbContext.SteamLicenses
+                .Where(license => license.OwnerAccountId == entitleeFullId)
+                .Where(license => license.LastSeen < seenTime)
+                .ExecuteDeleteAsync(ct);
+            await transaction.CommitAsync(ct);
+            logger.LogInformation("Done upserting accounts, packages, licenses, and entitlements");
+        } catch {
+            await transaction.RollbackAsync(ct);
+            throw;
         }
-        await dbContext.SaveChangesAsync(ct);
-
-        await dbContext.SteamLicenses
-            .Where(license => license.Entitlements
-                .All(entitlement => entitlement.EntitledAccountId == entitleeFullId && entitlement.LastSeen < seenTime)
-            )
-            .ExecuteDeleteAsync(ct);
-        await dbContext.SteamLicenseEntitlements
-            .Where(entitlement => entitlement.EntitledAccountId == entitleeFullId)
-            .Where(entitlement => entitlement.LastSeen < seenTime)
-            .ExecuteDeleteAsync(ct);
-        await dbContext.SteamLicenses
-            .Where(license => license.OwnerAccountId == entitleeFullId)
-            .Where(license => license.LastSeen < seenTime)
-            .ExecuteDeleteAsync(ct);
-        await transaction.CommitAsync(ct);
-        logger.LogInformation("Done upserting accounts, packages, licenses, and entitlements");
         return;
 
         async Task UpsertAccount(SteamID accountId)
