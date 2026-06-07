@@ -1,7 +1,9 @@
 using EntityFrameworkCore.Locking.PostgreSQL;
 using Haze.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL;
 using SteamKit2;
 
 namespace Haze;
@@ -71,5 +73,20 @@ public class HazeDbContext : DbContext
             .Entity<SteamLicenseEntitlement>()
             .Property(license => license.LicenseOwnerAccountId)
             .HasConversion(SteamIdValueConverter);
+    }
+
+    public IExecutionStrategy GetOneShotStrategy()
+    {
+        return new NpgsqlRetryingExecutionStrategy(this, 0);
+    }
+
+    public IExecutionStrategy GetRetryingStrategy()
+    {
+        return new NpgsqlRetryingExecutionStrategy(this);
+    }
+
+    public IExecutionStrategy GetRetryingStrategy(int maxRetryCount)
+    {
+        return new NpgsqlRetryingExecutionStrategy(this);
     }
 }
