@@ -1,3 +1,4 @@
+using EntityFrameworkCore.Locking.PostgreSQL;
 using Haze.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -32,7 +33,8 @@ public class HazeDbContext : DbContext
 
     /// <seealso href="https://www.npgsql.org/doc/connection-string-parameters.html">Connection String Parameters</seealso>
     protected override void OnConfiguring(DbContextOptionsBuilder options)
-        => options.UseNpgsql("Host=localhost; Username=haze; Password=haze; Database=haze;");
+        => options.UseNpgsql("Host=localhost; Username=haze; Password=haze; Database=haze;")
+            .UseLocking();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
