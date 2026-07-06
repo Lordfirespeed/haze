@@ -87,6 +87,6 @@ public class HazeDbContext : DbContext
 
     public IExecutionStrategy GetRetryingStrategy(int maxRetryCount)
     {
-        return new NpgsqlRetryingExecutionStrategy(this);
+        return new NpgsqlRetryingExecutionStrategy(this, maxRetryCount);
     }
 }
