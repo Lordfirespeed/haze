@@ -216,6 +216,23 @@ public class SteamSyncConnection
         if (packageResultSet.Failed) throw new Exception();  // todo: specific exception
         context.PackageInfos = [..packageResultSet.Results!.SelectMany(result => result.Packages.Values)];
 
+        var allDepotIds = context.PackageInfos.SelectMany(package => package.KeyValues["depotids"].Children)
+            .Select(child => child.AsUnsignedInteger())
+            .ToHashSet();
+
+        // inserts of depots use optimistic concurrency and should retry on unique constraint violations
+        await context.DbContextFactory.ExecuteRetryingAsync(async (dbContext, ct) =>
+            {
+                foreach (var depotId in allDepotIds) {
+                    await dbContext.SteamDepots.FindOrCreateAsync(depotId, ct);
+                }
+                await dbContext.SaveChangesAsync(ct);
+            },
+            (exception) => exception is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation },
+            6,
+            ct
+        );
+
         await using var dbContext = await context.DbContextFactory.CreateDbContextAsync(ct);
         await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
         var toUpdate = await context.GetPackageIdsWithChanges(dbContext, ct);
@@ -234,7 +251,8 @@ public class SteamSyncConnection
                 .Select(child => child.AsUnsignedInteger());
             foreach (var depotId in depotIds) {
                 var dbDepot = dbContext.SteamDepots.Local.FindEntry(depotId)?.Entity;
-                dbDepot ??= await dbContext.SteamDepots.FindOrCreateAsync(depotId, ct);
+                dbDepot ??= await dbContext.SteamDepots.FindAsync([depotId], ct);
+                Debug.Assert(dbDepot is not null);
                 dbPackage.Depots.Add(dbDepot);
             }
         }
