@@ -245,6 +245,7 @@ public class SteamSyncConnection
                 .ForUpdate()
                 .FirstOrDefaultAsync(p => p.SteamPackageId == package.ID, ct);
             Debug.Assert(dbPackage is not null);
+            if (dbPackage.LastChangeNumber >= package.ChangeNumber) continue;
             dbPackage.LastChangeNumber = package.ChangeNumber;
 
             var depotIds = package.KeyValues["depotids"].Children
