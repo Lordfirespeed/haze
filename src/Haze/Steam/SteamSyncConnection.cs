@@ -29,6 +29,15 @@ public record SteamSyncRefreshContext
     public IEnumerable<uint> LicensePackageIds => Licenses.Select(license => license.PackageID);
     public IDictionary<uint, ulong> PackageTokens { get; } = new Dictionary<uint, ulong>();
     public IImmutableList<SteamApps.PICSProductInfoCallback.PICSProductInfo>? PackageInfos { get; set; }
+    public ISet<uint> PackageInfosAppIds {
+        get {
+            if (PackageInfos is null) throw new InvalidOperationException();
+            return PackageInfos.SelectMany(
+                p => p.KeyValues["appids"].Children.Select(child => child.AsUnsignedInteger())
+            ).ToHashSet();
+        }
+    }
+
     public IDictionary<uint, ulong> AppTokens { get; } = new Dictionary<uint, ulong>();
     public IImmutableList<SteamApps.PICSProductInfoCallback.PICSProductInfo>? AppInfos { get; set; }
 
@@ -36,6 +45,14 @@ public record SteamSyncRefreshContext
     {
         foreach (var license in Licenses) {
             if (license.AccessToken > 0) PackageTokens[license.PackageID] = license.AccessToken;
+        }
+    }
+
+    public async Task PopulateAppTokensByRequesting()
+    {
+        var tokensResult = await Connection.Apps.PICSGetAccessTokens(appIds: PackageInfosAppIds, packageIds: []);
+        foreach (var (appId, appToken) in tokensResult.AppTokens) {
+            if (appToken > 0) AppTokens[appId] = appToken;
         }
     }
 
@@ -69,6 +86,16 @@ public record SteamSyncRefreshContext
         }
         return changes.PackageChanges.Values.Select(change => change.ID).ToHashSet();
     }
+
+    public async Task<ISet<uint>> GetAppIdsWithChanges(HazeDbContext dbContext, CancellationToken ct = default)
+    {
+        if (AppInfos is null) throw new InvalidOperationException();
+        var changes = await GetChangesSinceLastSync(dbContext, ct);
+        if (changes.RequiresFullUpdate || changes.RequiresFullAppUpdate) {
+            return AppInfos.Select(app => app.ID).ToHashSet();
+        }
+        return changes.AppChanges.Values.Select(change => change.ID).ToHashSet();
+    }
 }
 
 public class SteamSyncConnection
@@ -100,7 +127,9 @@ public class SteamSyncConnection
     async Task RefreshEverything(SteamSyncRefreshContext context)
     {
         await RefreshLicenses(context);
-        await RefreshPackages(context);
+        await RefreshDepots(context);
+        await RefreshApps(context);
+        await RefreshPackageRelations(context);
     }
 
     async Task RefreshLicenses(SteamSyncRefreshContext context, CancellationToken ct = default)
@@ -208,7 +237,7 @@ public class SteamSyncConnection
         }
     }
 
-    async Task RefreshPackages(SteamSyncRefreshContext context, CancellationToken ct = default)
+    async Task RefreshDepots(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
         context.PopulatePackageTokensFromLicenseList();
         var packageRequests = context.LicensePackageIds.Select(MakeRequestForId);
@@ -232,6 +261,53 @@ public class SteamSyncConnection
             6,
             ct
         );
+        return;
+
+        SteamApps.PICSRequest MakeRequestForId(uint id)
+        {
+            var token = context.PackageTokens.TryGetValue(id, out var maybeToken) ? maybeToken : 0;
+            return new SteamApps.PICSRequest(id, token);
+        }
+    }
+
+    async Task RefreshApps(SteamSyncRefreshContext context, CancellationToken ct = default)
+    {
+        await context.PopulateAppTokensByRequesting();
+        var appRequests = context.PackageInfosAppIds.Select(MakeRequestForId);
+        var appResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: appRequests, packages: []);
+        if (appResultSet.Failed) throw new Exception();  // todo: specific exception
+        context.AppInfos = [..appResultSet.Results!.SelectMany(result => result.Apps.Values)];
+
+        // inserts of apps use optimistic concurrency and should retry on unique constraint violations
+        await context.DbContextFactory.ExecuteRetryingAsync(async (dbContext, ct) =>
+            {
+                foreach (var app in context.AppInfos) {
+                    await UpsertApp(dbContext, app.ID);
+                }
+                await dbContext.SaveChangesAsync(ct);
+            },
+            (exception) => exception is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation },
+            6,
+            ct
+        );
+        return;
+
+        SteamApps.PICSRequest MakeRequestForId(uint id)
+        {
+            var token = context.AppTokens.TryGetValue(id, out var maybeToken) ? maybeToken : 0;
+            return new SteamApps.PICSRequest(id, token);
+        }
+
+        async Task UpsertApp(HazeDbContext dbContext, uint appId, CancellationToken ct = default)
+        {
+            var dbApp = await dbContext.SteamApps.FindOrCreateAsync(appId, ct);
+        }
+    }
+
+    async Task RefreshPackageRelations(SteamSyncRefreshContext context, CancellationToken ct = default)
+    {
+        if (context.PackageInfos is null) throw new InvalidOperationException();
+        if (context.AppInfos is null) throw new InvalidOperationException();
 
         await using var dbContext = await context.DbContextFactory.CreateDbContextAsync(ct);
         await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
@@ -241,13 +317,15 @@ public class SteamSyncConnection
             if (!toUpdate.Contains(package.ID)) continue;
 
             var dbPackage = await dbContext.SteamPackages
-                .Include(p => p.Depots)
                 .ForUpdate()
+                .Include(p => p.Depots)
+                .Include(p => p.Apps)
                 .FirstOrDefaultAsync(p => p.SteamPackageId == package.ID, ct);
             Debug.Assert(dbPackage is not null);
             if (dbPackage.LastChangeNumber >= package.ChangeNumber) continue;
             dbPackage.LastChangeNumber = package.ChangeNumber;
 
+            dbPackage.Depots.Clear();
             var depotIds = package.KeyValues["depotids"].Children
                 .Select(child => child.AsUnsignedInteger());
             foreach (var depotId in depotIds) {
@@ -256,15 +334,17 @@ public class SteamSyncConnection
                 Debug.Assert(dbDepot is not null);
                 dbPackage.Depots.Add(dbDepot);
             }
+
+            dbPackage.Apps.Clear();
+            var appIds = package.KeyValues["appids"].Children.Select(child => child.AsUnsignedInteger());
+            foreach (var appId in appIds) {
+                var dbApp = dbContext.SteamApps.Local.FindEntry(appId)?.Entity;
+                dbApp ??= await dbContext.SteamApps.FindAsync([appId], ct);
+                Debug.Assert(dbApp is not null);
+                dbPackage.Apps.Add(dbApp);
+            }
         }
         await dbContext.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        return;
-
-        SteamApps.PICSRequest MakeRequestForId(uint id)
-        {
-            var token = context.PackageTokens.TryGetValue(id, out var maybeToken) ? maybeToken : 0;
-            return new SteamApps.PICSRequest(id, token);
-        }
     }
 }
