@@ -9,7 +9,9 @@ using System.Threading.Tasks;
 using EntityFrameworkCore.Locking;
 using Haze.Models;
 using Haze.Util;
+using HazeCommon.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using SteamKit2;
 
@@ -99,17 +101,67 @@ public record SteamSyncRefreshContext
     }
 }
 
-public class SteamSyncConnection
+public class SteamSyncConnection : IAsyncDisposable
 {
     public static TimeSpan RefreshDelay = TimeSpan.FromSeconds(1);
 
-    public required IDbContextFactory<HazeDbContext> DbContextFactory { get; init; }
-    public required SteamConnection Connection { get; init; }
-    public required Channel<Func<Task>> WorkQueue { get; init; }
+    public IDbContextFactory<HazeDbContext> DbContextFactory { get; }
+    public SteamAccount Account { get; }
+    public SteamConnection Connection { get; }
+    public Channel<Func<Task>> WorkQueue { get; }
+
+    private readonly CancellationTokenSource _workLoopCts = new();
+    private readonly Task _workLoopTask;
+    private readonly IDisposable[] _subscriptions;
+    private readonly ILogger _logger;
 
     public DateTime? LastRefreshTriggeredAt { get; set; }
     public bool ShouldLicenseListTriggerRefresh
         => LastRefreshTriggeredAt == null || (DateTime.UtcNow - LastRefreshTriggeredAt) >= RefreshDelay;
+
+    public SteamSyncConnection(
+        ILogger logger,
+        IDbContextFactory<HazeDbContext> dbContextFactory,
+        SteamAccount account,
+        Channel<Func<Task>> workQueue
+    ) {
+        _logger = logger;
+        DbContextFactory = dbContextFactory;
+        Account = account;
+        Connection = new SteamConnection(logger);
+        WorkQueue = workQueue;
+        _subscriptions = [
+            Connection.Manager.Subscribe<SteamApps.LicenseListCallback>(OnLicenseList),
+        ];
+        _workLoopTask = Task.Run(() => WorkForeverAsync(_workLoopCts.Token), _workLoopCts.Token);
+    }
+
+    public async Task Start(CancellationToken ct = default)
+    {
+        await using var dbContext = await DbContextFactory.CreateDbContextAsync(ct);
+        var cred = await dbContext.SteamAccountCredentials
+            .Where(cred => cred.Usage == SteamAccountCredentialUsage.HazeOnly)
+            .FirstOrDefaultAsync(cred => cred.SteamAccountId == Account.SteamAccountId, ct);
+        if (cred is null) return;  // concerning if this happens, should log something
+
+        await Connection.Connect();
+        Connection.DbAuth(cred);
+        await Connection.LogOn();
+    }
+
+    async Task WorkForeverAsync(CancellationToken ct = default)
+    {
+        while (true) {
+            ct.ThrowIfCancellationRequested();
+            try {
+                var workUnit = await WorkQueue.Reader.ReadAsync(ct);
+                await Task.Run(workUnit, ct);
+            } catch (OperationCanceledException) {
+                ct.ThrowIfCancellationRequested();
+                throw;
+            }
+        }
+    }
 
     async Task OnLicenseList(SteamApps.LicenseListCallback message)
     {
@@ -366,5 +418,13 @@ public class SteamSyncConnection
         }
         await dbContext.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await Connection.DisposeAsync();
+        foreach (var subscription in _subscriptions) subscription.Dispose();
+        await _workLoopCts.CancelAsync();
+        await _workLoopTask.IgnoreCancellationBy(_workLoopCts.Token);
     }
 }
