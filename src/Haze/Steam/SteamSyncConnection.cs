@@ -124,12 +124,12 @@ public class SteamSyncConnection
         await WorkQueue.Writer.WriteAsync(Task () => RefreshEverything(ctx));
     }
 
-    async Task RefreshEverything(SteamSyncRefreshContext context)
+    async Task RefreshEverything(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
-        await RefreshLicenses(context);
-        await RefreshDepots(context);
-        await RefreshApps(context);
-        await RefreshPackageRelations(context);
+        await RefreshLicenses(context, ct);
+        await RefreshDepots(context, ct);
+        await RefreshApps(context, ct);
+        await RefreshPackageRelations(context, ct);
     }
 
     async Task RefreshLicenses(SteamSyncRefreshContext context, CancellationToken ct = default)
