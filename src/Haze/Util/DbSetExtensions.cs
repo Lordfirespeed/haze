@@ -87,4 +87,16 @@ public static class DbSetExtensions
             return dbDepot;
         }
     }
+
+    extension(DbSet<SteamApp> dbSet)
+    {
+        public async Task<SteamApp> FindOrCreateAsync(uint appId, CancellationToken ct = default)
+        {
+            var dbApp = await dbSet.FindAsync([appId], ct);
+            if (dbApp is not null) return dbApp;
+            dbApp = new SteamApp { SteamAppId = appId, LastChangeNumber = 0 };
+            dbSet.Add(dbApp);
+            return dbApp;
+        }
+    }
 }
