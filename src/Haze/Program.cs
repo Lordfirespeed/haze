@@ -20,8 +20,8 @@ WebApplication BuildApp() {
     builder.Services.AddControllers();
     builder.Services.AddDbContextFactory<HazeDbContext>();
     builder.Services.AddSingleton<HazeConnectionManager>();
-    builder.Services.AddSingleton<SteamLicenseGetter>();
     builder.Services.AddHostedService<GreedySchedulingService>();
+    builder.Services.AddHostedService<SteamSyncService>();
 
     builder.Configuration["Logging:LogLevel:Default"] = "Debug";
 
@@ -41,7 +41,6 @@ using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, cancel))
 await using (var app = BuildApp())
 {
     await app.StartAsync(cancellationSource.Token);
-    //await app.Services.GetService<SteamLicenseGetter>()!.Foo(cancellationSource.Token);
     await Task.Delay(-1, cancellationSource.Token).IgnoreCancellationBy(cancellationSource.Token);
     await app.StopAsync(CancellationToken.None);
 }
