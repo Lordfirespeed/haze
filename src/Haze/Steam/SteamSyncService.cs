@@ -42,6 +42,9 @@ public class SteamSyncService(
 
     public async Task StopAsync(CancellationToken ct)
     {
-
+        foreach (var (steamId, syncConnection) in Connections) {
+            await syncConnection.DisposeAsync();
+        }
+        Connections.Clear();
     }
 }
