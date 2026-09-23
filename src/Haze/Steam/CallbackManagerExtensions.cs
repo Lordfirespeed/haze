@@ -55,7 +55,7 @@ public static class CallbackManagerExtensions
         where TCallback : CallbackMsg
     {
         var cts = new CancellationTokenSource();
-        var disposable = manager.Subscribe<TCallback>(callback => {
+        var disposable = manager.Subscribe<TCallback>(jobId, callback => {
             Task.Run(async () => await callbackFunc(callback), cts.Token);
         });
         return new CancellingDisposable(cts, disposable);
