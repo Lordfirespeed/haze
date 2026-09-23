@@ -25,6 +25,7 @@ public record SteamSyncRefreshContext
     public SteamConnection Connection => SyncConnection.Connection;
     public IDbContextFactory<HazeDbContext> DbContextFactory => SyncConnection.DbContextFactory;
     public SteamID AccountId => Connection.IsLoggedOn ? Connection.AccountId : throw new InvalidOperationException();
+    public uint CurrentChangeNumber => _changesSinceLastSync?.CurrentChangeNumber ?? throw new InvalidOperationException();
     public IReadOnlyList<SteamApps.LicenseListCallback.License> Licenses => Message.LicenseList;
     public IEnumerable<uint> LicensePackageIds => Licenses.Select(license => license.PackageID);
     public IDictionary<uint, ulong> PackageTokens { get; } = new Dictionary<uint, ulong>();
@@ -126,10 +127,29 @@ public class SteamSyncConnection
 
     async Task RefreshEverything(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
+        var refreshStartedAt = DateTime.UtcNow;
         await RefreshLicenses(context, ct);
         await RefreshDepots(context, ct);
         await RefreshApps(context, ct);
         await RefreshPackageRelations(context, ct);
+        var refreshCompletedAt = DateTime.UtcNow;
+
+        var attempt = new SteamAccountProductInfoRefreshAttempt
+        {
+            SteamAccountId = context.AccountId,
+            AttemptStartedAt = refreshStartedAt,
+            AttemptCompletedAt = refreshCompletedAt,
+            LastChangeNumber = context.CurrentChangeNumber,
+        };
+        await context.DbContextFactory.ExecuteRetryingAsync(async (dbContext, ct) =>
+        {
+            dbContext.SteamAccountProductInfoRefreshAttempts.Add(attempt);
+            await dbContext.SaveChangesAsync(ct);
+        },
+            (exception) => false,
+            6,
+            ct
+        );
     }
 
     async Task RefreshLicenses(SteamSyncRefreshContext context, CancellationToken ct = default)
