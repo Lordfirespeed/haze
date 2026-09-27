@@ -324,6 +324,7 @@ public class SteamSyncConnection : IAsyncDisposable
         if (packageResultSet.Failed) throw new Exception();  // todo: specific exception
         context.PackageInfos = [..packageResultSet.Results!.SelectMany(result => result.Packages.Values)];
 
+        _logger.LogDebug($"{DateTime.UtcNow}: Upserting depots for {context.AccountId}");
         var allDepotIds = context.PackageInfos.SelectMany(package => package.KeyValues["depotids"].Children)
             .Select(child => child.AsUnsignedInteger())
             .ToHashSet();
@@ -331,15 +332,14 @@ public class SteamSyncConnection : IAsyncDisposable
         // inserts of depots use optimistic concurrency and should retry on unique constraint violations
         await context.DbContextFactory.ExecuteRetryingAsync(async (dbContext, ct) =>
             {
-                foreach (var depotId in allDepotIds) {
-                    await dbContext.SteamDepots.FindOrCreateAsync(depotId, ct);
-                }
+                await dbContext.SteamDepots.FindOrCreateManyAsync(allDepotIds, ct);
                 await dbContext.SaveChangesAsync(ct);
             },
             (exception) => exception is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation },
             6,
             ct
         );
+        _logger.LogDebug($"{DateTime.UtcNow}: Done upserting depots for {context.AccountId}");
         return;
 
         SteamApps.PICSRequest MakeRequestForId(uint id)

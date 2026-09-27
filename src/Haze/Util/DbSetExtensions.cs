@@ -88,6 +88,19 @@ public static class DbSetExtensions
             dbSet.Add(dbDepot);
             return dbDepot;
         }
+
+        public async Task FindOrCreateManyAsync(ICollection<uint> depotIds, CancellationToken ct = default)
+        {
+            var existingDbApps = dbSet.Where(depot => depotIds.Contains(depot.SteamDepotId)).AsAsyncEnumerable();
+            var toCreateIds = depotIds.ToHashSet();
+            await foreach (var depot in existingDbApps) {
+                toCreateIds.Remove(depot.SteamDepotId);
+            }
+            foreach (var depotId in toCreateIds) {
+                var dbDepot = new SteamDepot { SteamDepotId = depotId };
+                dbSet.Add(dbDepot);
+            }
+        }
     }
 
     extension(DbSet<SteamApp> dbSet)
