@@ -18,7 +18,7 @@ public static class DbContextFactoryExtensions
                 await using var dbContext = await factory.CreateDbContextAsync(ct);
                 try {
                     await action(dbContext, ct);
-                    break;
+                    return;
                 }
                 catch (Exception e) when (shouldRetryOn(e)) { }
                 retryCount++;
