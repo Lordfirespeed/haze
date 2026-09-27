@@ -351,6 +351,7 @@ public class SteamSyncConnection : IAsyncDisposable
 
     async Task RefreshApps(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
+        // I think we might not need to request *all* the apps here
         await context.PopulateAppTokensByRequesting();
         var appRequests = context.PackageInfosAppIds.Select(MakeRequestForId);
         var appResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: appRequests, packages: []);
