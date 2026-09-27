@@ -141,6 +141,7 @@ public class SteamSyncConnection : IAsyncDisposable
         await using var dbContext = await DbContextFactory.CreateDbContextAsync(ct);
         var cred = await dbContext.SteamAccountCredentials
             .Where(cred => cred.Usage == SteamAccountCredentialUsage.HazeOnly)
+            .Include(cred => cred.Account)
             .FirstOrDefaultAsync(cred => cred.SteamAccountId == Account.SteamAccountId, ct);
         if (cred is null) return;  // concerning if this happens, should log something
 
