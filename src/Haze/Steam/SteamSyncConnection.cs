@@ -160,6 +160,8 @@ public class SteamSyncConnection : IAsyncDisposable
             } catch (OperationCanceledException) {
                 ct.ThrowIfCancellationRequested();
                 throw;
+            } catch (Exception exc) {
+                _logger.LogError(exc, null);
             }
         }
     }
@@ -228,6 +230,7 @@ public class SteamSyncConnection : IAsyncDisposable
             6,
             ct
         );
+        _logger.LogInformation("done ensuring accounts and packages exist");
 
         // inserts of licenses owned by the entitlee have no concurrent concerns
         {
@@ -238,6 +241,7 @@ public class SteamSyncConnection : IAsyncDisposable
             }
             await dbContext.SaveChangesAsync(ct);
         }
+        _logger.LogInformation("done upserting own licenses");
 
         // inserts of licenses *not* owned by the entitlee use optimistic concurrency and should retry on unique constraint violations
         await context.DbContextFactory.ExecuteRetryingAsync(async (dbContext, ct) =>
@@ -252,6 +256,7 @@ public class SteamSyncConnection : IAsyncDisposable
             6,
             ct
         );
+        _logger.LogInformation("done upserting shared licenses");
 
         // inserts of entitlements have no concurrent concerns
         {
@@ -261,6 +266,7 @@ public class SteamSyncConnection : IAsyncDisposable
             }
             await dbContext.SaveChangesAsync(ct);
         }
+        _logger.LogInformation("done upserting entitlements");
 
         {
             await using var dbContext = await context.DbContextFactory.CreateDbContextAsync(ct);
