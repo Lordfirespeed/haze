@@ -15,8 +15,9 @@ namespace Haze.Steam;
 public class SteamSyncService(
     ILogger<SteamSyncService> logger,
     IDbContextFactory<HazeDbContext> dbContextFactory
-) : IHostedService {
-    protected ConcurrentDictionary<SteamID, SteamSyncConnection> Connections { get; init; }
+) : IHostedService
+{
+    protected ConcurrentDictionary<SteamID, SteamSyncConnection> Connections { get; } = new();
 
     private static readonly BoundedChannelOptions WorkQueueOptions = new(3)
     {
