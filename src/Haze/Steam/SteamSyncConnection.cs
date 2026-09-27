@@ -358,7 +358,7 @@ public class SteamSyncConnection : IAsyncDisposable
         context.AppInfos = [..appResultSet.Results!.SelectMany(result => result.Apps.Values)];
 
         // inserts of apps use optimistic concurrency and should retry on unique constraint violations
-        _logger.LogInformation($"{DateTime.UtcNow}: Upserting apps for {context.AccountId}");
+        _logger.LogDebug($"{DateTime.UtcNow}: Upserting apps for {context.AccountId}");
         var appIds = context.AppInfos.Select(app => app.ID).ToArray();
         await context.DbContextFactory.ExecuteRetryingAsync(async (dbContext, ct) =>
             {
@@ -369,7 +369,7 @@ public class SteamSyncConnection : IAsyncDisposable
             6,
             ct
         );
-        _logger.LogInformation($"{DateTime.UtcNow}: Done upserting apps for {context.AccountId}");
+        _logger.LogDebug($"{DateTime.UtcNow}: Done upserting apps for {context.AccountId}");
         return;
 
         SteamApps.PICSRequest MakeRequestForId(uint id)
