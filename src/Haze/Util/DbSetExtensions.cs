@@ -21,6 +21,19 @@ public static class DbSetExtensions
             dbSet.Add(dbAccount);
             return dbAccount;
         }
+
+        public async Task FindOrCreateManyAsync(ICollection<SteamID> accountIds, CancellationToken ct = default)
+        {
+            var existingAccounts = dbSet.Where(account => accountIds.Contains(account.SteamAccountId)).AsAsyncEnumerable();
+            var toCreateIds = accountIds.ToHashSet();
+            await foreach (var account in existingAccounts) {
+                toCreateIds.Remove(account.SteamAccountId);
+            }
+            foreach (var accountId in toCreateIds) {
+                var dbAccount = new SteamAccount { SteamAccountId = accountId };
+                dbSet.Add(dbAccount);
+            }
+        }
     }
 
     extension(DbSet<SteamPackage> dbSet)
@@ -34,6 +47,21 @@ public static class DbSetExtensions
             // change tracker thinks package ID is unset if the package ID is zero - force it to accept package ID
             entry.Property(nameof(SteamPackage.SteamPackageId)).CurrentValue = packageId;
             return dbPackage;
+        }
+
+        public async Task FindOrCreateManyAsync(ICollection<uint> packageIds, CancellationToken ct = default)
+        {
+            var existingPackages = dbSet.Where(package => packageIds.Contains(package.SteamPackageId)).AsAsyncEnumerable();
+            var toCreateIds = packageIds.ToHashSet();
+            await foreach (var package in existingPackages) {
+                toCreateIds.Remove(package.SteamPackageId);
+            }
+            foreach (var packageId in toCreateIds) {
+                var dbPackage = new SteamPackage { SteamPackageId = packageId, LastChangeNumber = 0 };
+                var entry = dbSet.Add(dbPackage);
+                // change tracker thinks package ID is unset if the package ID is zero - force it to accept package ID
+                entry.Property(nameof(SteamPackage.SteamPackageId)).CurrentValue = packageId;
+            }
         }
     }
 
