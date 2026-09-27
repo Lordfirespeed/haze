@@ -358,28 +358,24 @@ public class SteamSyncConnection : IAsyncDisposable
         context.AppInfos = [..appResultSet.Results!.SelectMany(result => result.Apps.Values)];
 
         // inserts of apps use optimistic concurrency and should retry on unique constraint violations
+        _logger.LogInformation($"{DateTime.UtcNow}: Upserting apps for {context.AccountId}");
+        var appIds = context.AppInfos.Select(app => app.ID).ToArray();
         await context.DbContextFactory.ExecuteRetryingAsync(async (dbContext, ct) =>
             {
-                foreach (var app in context.AppInfos) {
-                    await UpsertApp(dbContext, app.ID);
-                }
+                await dbContext.SteamApps.FindOrCreateManyAsync(appIds, ct);
                 await dbContext.SaveChangesAsync(ct);
             },
             (exception) => exception is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation },
             6,
             ct
         );
+        _logger.LogInformation($"{DateTime.UtcNow}: Done upserting apps for {context.AccountId}");
         return;
 
         SteamApps.PICSRequest MakeRequestForId(uint id)
         {
             var token = context.AppTokens.TryGetValue(id, out var maybeToken) ? maybeToken : 0;
             return new SteamApps.PICSRequest(id, token);
-        }
-
-        async Task UpsertApp(HazeDbContext dbContext, uint appId, CancellationToken ct = default)
-        {
-            var dbApp = await dbContext.SteamApps.FindOrCreateAsync(appId, ct);
         }
     }
 

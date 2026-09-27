@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Haze.Models;
@@ -97,6 +99,19 @@ public static class DbSetExtensions
             dbApp = new SteamApp { SteamAppId = appId, LastChangeNumber = 0 };
             dbSet.Add(dbApp);
             return dbApp;
+        }
+
+        public async Task FindOrCreateManyAsync(ICollection<uint> appIds, CancellationToken ct = default)
+        {
+            var existingDbApps = dbSet.Where(app => appIds.Contains(app.SteamAppId)).AsAsyncEnumerable();
+            var toCreateIds = appIds.ToHashSet();
+            await foreach (var app in existingDbApps) {
+                toCreateIds.Remove(app.SteamAppId);
+            }
+            foreach (var appId in toCreateIds) {
+                var dbApp = new SteamApp { SteamAppId = appId, LastChangeNumber = 0 };
+                dbSet.Add(dbApp);
+            }
         }
     }
 }
