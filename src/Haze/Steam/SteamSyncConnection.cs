@@ -335,7 +335,7 @@ public class SteamSyncConnection : IAsyncDisposable
     async Task RefreshDepots(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
         context.PopulatePackageTokensFromLicenseList();
-        var packageRequests = context.LicensePackageIds.Select(MakeRequestForId);
+        var packageRequests = context.LicensePackageIds.ToHashSet().Select(MakeRequestForId);
         var packageResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
         if (packageResultSet.Failed) throw new Exception();  // todo: specific exception
         context.PackageInfos = [..packageResultSet.Results!.SelectMany(result => result.Packages.Values)];
