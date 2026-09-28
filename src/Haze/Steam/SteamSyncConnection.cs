@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
@@ -10,6 +11,7 @@ using EntityFrameworkCore.Locking;
 using Haze.Models;
 using Haze.Util;
 using HazeCommon.Models;
+using Microsoft.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -32,12 +34,11 @@ public record SteamSyncRefreshContext
     public IEnumerable<uint> LicensePackageIds => Licenses.Select(license => license.PackageID);
     public IDictionary<uint, ulong> PackageTokens { get; } = new Dictionary<uint, ulong>();
     public IImmutableList<SteamApps.PICSProductInfoCallback.PICSProductInfo>? PackageInfos { get; set; }
+    public IImmutableDictionary<uint, SteamApps.PICSProductInfoCallback.PICSProductInfo>? PackageInfoLookup { get; set; }
     public ISet<uint> PackageInfosAppIds {
         get {
             if (PackageInfos is null) throw new InvalidOperationException();
-            return PackageInfos.SelectMany(
-                p => p.KeyValues["appids"].Children.Select(child => child.AsUnsignedInteger())
-            ).ToHashSet();
+            return PackageInfos.SelectMany(p => p.GetPackageAppIds()).ToHashSet();
         }
     }
 
@@ -59,15 +60,21 @@ public record SteamSyncRefreshContext
         }
     }
 
-    public Task<SteamAccountProductInfoRefreshAttempt?> GetLastSyncAttempt(HazeDbContext dbContext, CancellationToken ct = default)
+    // Optional is necessary as the last refresh attempt is potentially `null`
+    private Optional<SteamAccountProductInfoRefreshAttempt?> _lastSyncAttempt;
+    public async Task<SteamAccountProductInfoRefreshAttempt?> GetLastSyncAttempt(HazeDbContext dbContext, CancellationToken ct = default)
     {
-        return dbContext.SteamAccountProductInfoRefreshAttempts
+        if (_lastSyncAttempt.HasValue) return _lastSyncAttempt.Value;
+        var lastSyncAttempt = await dbContext.SteamAccountProductInfoRefreshAttempts
             .Where(attempt => attempt.SteamAccountId == AccountId)
             .OrderByDescending(attempt => attempt.AttemptCompletedAt)
             .FirstOrDefaultAsync(ct);
+        _lastSyncAttempt = lastSyncAttempt;
+        return lastSyncAttempt;
     }
 
     private SteamApps.PICSChangesCallback? _changesSinceLastSync;
+    [MemberNotNull(nameof(_changesSinceLastSync))]
     public async Task<SteamApps.PICSChangesCallback> GetChangesSinceLastSync(HazeDbContext dbContext, CancellationToken ct = default)
     {
         if (_changesSinceLastSync is not null) return _changesSinceLastSync;
@@ -81,23 +88,46 @@ public record SteamSyncRefreshContext
         return changes;
     }
 
+    private ICollection<SteamApps.LicenseListCallback.License>? _licensesCreatedSinceLastSync;
+    [MemberNotNull(nameof(_licensesCreatedSinceLastSync))]
+    public async Task<ICollection<SteamApps.LicenseListCallback.License>> GetLicensesCreatedSinceLastSync(HazeDbContext dbContext, CancellationToken ct = default)
+    {
+        if (_licensesCreatedSinceLastSync is not null) return _licensesCreatedSinceLastSync;
+        var lastSyncAttempt = await GetLastSyncAttempt(dbContext, ct);
+        var licenses = Licenses
+            .Where(license => license.TimeCreated > (lastSyncAttempt?.AttemptStartedAt ?? DateTime.UnixEpoch))
+            .ToImmutableArray();
+        _licensesCreatedSinceLastSync = licenses;
+        return licenses;
+    }
+
     public async Task<ISet<uint>> GetPackageIdsWithChanges(HazeDbContext dbContext, CancellationToken ct = default)
     {
         var changes = await GetChangesSinceLastSync(dbContext, ct);
         if (changes.RequiresFullUpdate || changes.RequiresFullPackageUpdate) {
             return LicensePackageIds.ToHashSet();
         }
-        return changes.PackageChanges.Values.Select(change => change.ID).ToHashSet();
+        var newLicenses = await GetLicensesCreatedSinceLastSync(dbContext, ct);
+        var newPackageIds = newLicenses.Select(license => license.PackageID);
+        var changedPackageIds = changes.PackageChanges.Values.Select(change => change.ID);
+        return changedPackageIds.Concat(newPackageIds).ToHashSet();
     }
 
     public async Task<ISet<uint>> GetAppIdsWithChanges(HazeDbContext dbContext, CancellationToken ct = default)
     {
         if (AppInfos is null) throw new InvalidOperationException();
+        if (PackageInfoLookup is null) throw new InvalidOperationException();
+
         var changes = await GetChangesSinceLastSync(dbContext, ct);
         if (changes.RequiresFullUpdate || changes.RequiresFullAppUpdate) {
             return AppInfos.Select(app => app.ID).ToHashSet();
         }
-        return changes.AppChanges.Values.Select(change => change.ID).ToHashSet();
+        var newLicenses = await GetLicensesCreatedSinceLastSync(dbContext, ct);
+        var newAppIds = newLicenses
+            .Select(license => PackageInfoLookup[license.PackageID])
+            .SelectMany(package => package.GetPackageAppIds());
+        var changedAppIds = changes.AppChanges.Values.Select(change => change.ID);
+        return changedAppIds.Concat(newAppIds).ToHashSet();
     }
 }
 
@@ -309,6 +339,7 @@ public class SteamSyncConnection : IAsyncDisposable
         var packageResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
         if (packageResultSet.Failed) throw new Exception();  // todo: specific exception
         context.PackageInfos = [..packageResultSet.Results!.SelectMany(result => result.Packages.Values)];
+        context.PackageInfoLookup = context.PackageInfos.ToImmutableDictionary(package => package.ID);
 
         _logger.LogDebug($"{DateTime.UtcNow}: Upserting depots for {context.AccountId}");
         var allDepotIds = context.PackageInfos.SelectMany(package => package.KeyValues["depotids"].Children)
@@ -388,8 +419,7 @@ public class SteamSyncConnection : IAsyncDisposable
             dbPackage.LastChangeNumber = package.ChangeNumber;
 
             dbPackage.Depots.Clear();
-            var depotIds = package.KeyValues["depotids"].Children
-                .Select(child => child.AsUnsignedInteger());
+            var depotIds = package.GetPackageDepotIds();
             foreach (var depotId in depotIds) {
                 var dbDepot = dbContext.SteamDepots.Local.FindEntry(depotId)?.Entity;
                 dbDepot ??= await dbContext.SteamDepots.FindAsync([depotId], ct);
@@ -398,7 +428,7 @@ public class SteamSyncConnection : IAsyncDisposable
             }
 
             dbPackage.Apps.Clear();
-            var appIds = package.KeyValues["appids"].Children.Select(child => child.AsUnsignedInteger());
+            var appIds = package.GetPackageAppIds();
             foreach (var appId in appIds) {
                 var dbApp = dbContext.SteamApps.Local.FindEntry(appId)?.Entity;
                 dbApp ??= await dbContext.SteamApps.FindAsync([appId], ct);
