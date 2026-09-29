@@ -212,7 +212,7 @@ public class SteamSyncConnection : IAsyncDisposable
 
     async Task RefreshEverything(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
-        var refreshStartedAt = DateTime.UtcNow;
+        context.StartedAtUtc = DateTime.UtcNow;
         await RefreshLicenses(context, ct);
         await RefreshDepots(context, ct);
         await RefreshApps(context, ct);
@@ -222,7 +222,7 @@ public class SteamSyncConnection : IAsyncDisposable
         var attempt = new SteamAccountProductInfoRefreshAttempt
         {
             SteamAccountId = context.AccountId,
-            AttemptStartedAt = refreshStartedAt,
+            AttemptStartedAt = context.StartedAtUtc,
             AttemptCompletedAt = refreshCompletedAt,
             LastChangeNumber = context.CurrentChangeNumber,
         };
