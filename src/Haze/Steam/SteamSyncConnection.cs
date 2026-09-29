@@ -31,7 +31,7 @@ public record SteamSyncRefreshContext
     public SteamID AccountId => Connection.IsLoggedOn ? Connection.AccountId : throw new InvalidOperationException();
     public uint CurrentChangeNumber => _changesSinceLastSync?.CurrentChangeNumber ?? throw new InvalidOperationException();
     public IReadOnlyList<SteamApps.LicenseListCallback.License> Licenses => Message.LicenseList;
-    public IEnumerable<uint> LicensePackageIds => Licenses.Select(license => license.PackageID);
+    public ISet<uint> LicensePackageIds => Licenses.Select(license => license.PackageID).ToHashSet();
     public IDictionary<uint, ulong> PackageTokens { get; } = new Dictionary<uint, ulong>();
     public IImmutableList<SteamApps.PICSProductInfoCallback.PICSProductInfo>? PackageInfos { get; set; }
     public IImmutableDictionary<uint, SteamApps.PICSProductInfoCallback.PICSProductInfo>? PackageInfoLookup { get; set; }
@@ -335,7 +335,7 @@ public class SteamSyncConnection : IAsyncDisposable
     async Task RefreshDepots(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
         context.PopulatePackageTokensFromLicenseList();
-        var packageRequests = context.LicensePackageIds.ToHashSet().Select(MakeRequestForId);
+        var packageRequests = context.LicensePackageIds.Select(MakeRequestForId);
         var packageResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
         if (packageResultSet.Failed) throw new Exception();  // todo: specific exception
         context.PackageInfos = [..packageResultSet.Results!.SelectMany(result => result.Packages.Values)];
