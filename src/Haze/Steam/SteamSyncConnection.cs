@@ -257,32 +257,17 @@ public class SteamSyncConnection : IAsyncDisposable
         );
         _logger.LogInformation("done ensuring accounts and packages exist");
 
-        // inserts of licenses owned by the entitlee have no concurrent concerns
-        {
-            await using var dbContext = await context.DbContextFactory.CreateDbContextAsync(ct);
-            foreach (var license in context.Licenses) {
-                if (!license.IsOwnedBy(context.AccountId)) continue;
-                await UpsertLicense(dbContext, license, ct);
-            }
-            await dbContext.SaveChangesAsync(ct);
-        }
-        _logger.LogInformation("done upserting own licenses");
-
-        // inserts of licenses *not* owned by the entitlee use optimistic concurrency and should retry on unique constraint violations
+        // inserts of licenses use optimistic concurrency and should retry on unique constraint violations
         await context.DbContextFactory.ExecuteRetryingAsync(async (dbContext, ct) =>
             {
-
-                foreach (var license in context.Licenses) {
-                    if (license.IsOwnedBy(context.AccountId)) continue;
-                    await UpsertLicense(dbContext, license, ct);
-                }
+                await dbContext.SteamLicenses.FindOrCreateManyAsync(context.Licenses, context.AccountId, seenTime, ct);
                 await dbContext.SaveChangesAsync(ct);
             },
             (exception) => exception is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation },
             6,
             ct
         );
-        _logger.LogInformation("done upserting shared licenses");
+        _logger.LogInformation("done upserting licenses");
 
         // inserts of entitlements have no concurrent concerns
         {
@@ -318,12 +303,6 @@ public class SteamSyncConnection : IAsyncDisposable
                 .ExecuteDeleteAsync(ct);
         }
         return;
-
-        async Task UpsertLicense(HazeDbContext dbContext, SteamApps.LicenseListCallback.License license, CancellationToken ct = default)
-        {
-            var dbLicense = await dbContext.SteamLicenses.FindOrCreateAsync(license, context.AccountId, ct);
-            dbLicense.LastSeen = seenTime;
-        }
 
         async Task UpsertEntitlement(HazeDbContext dbContext, SteamApps.LicenseListCallback.License license, CancellationToken ct = default)
         {
