@@ -86,11 +86,13 @@ public static class DbSetExtensions
         public IQueryable<SteamLicense> WhereKeyIn(ICollection<LicensePrimaryKey> keys)
         {
             var keyTuplesString = String.Join(",", keys.Select(key => key.ToQueryString()));
+#pragma warning disable EF1002
             return dbSet.FromSqlRaw(
                 $"""
                 SELECT * FROM "SteamLicenses" WHERE ("OwnerAccountId", "PackageId") in ({keyTuplesString})
                 """
             );
+#pragma warning restore EF1002
         }
 
         public async Task FindOrCreateManyAsync(
