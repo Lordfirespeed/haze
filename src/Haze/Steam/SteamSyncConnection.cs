@@ -272,9 +272,7 @@ public class SteamSyncConnection : IAsyncDisposable
         // inserts of entitlements have no concurrent concerns
         {
             await using var dbContext = await context.DbContextFactory.CreateDbContextAsync(ct);
-            foreach (var license in context.Licenses) {
-                await UpsertEntitlement(dbContext, license, ct);
-            }
+            await dbContext.SteamLicenseEntitlements.FindOrCreateManyAsync(context.Licenses, context.AccountId, seenTime, ct);
             await dbContext.SaveChangesAsync(ct);
         }
         _logger.LogInformation("done upserting entitlements");
