@@ -105,7 +105,7 @@ public static class DbSetExtensions
                 license => LicensePrimaryKey.FromLicenseList(license, entitleeId)
             ).ToHashSet();
             var existingLicenses = dbSet.WhereKeyIn(toCreateLicenseKeys).AsAsyncEnumerable();
-            await foreach (var license in existingLicenses) {
+            await foreach (var license in existingLicenses.WithCancellation(ct)) {
                 toCreateLicenseKeys.Remove(LicensePrimaryKey.FromDb(license));
                 license.LastSeen = seenTime;
             }
