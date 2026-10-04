@@ -25,10 +25,11 @@ public class SteamConnection : IAsyncDisposable
     [MemberNotNullWhen(true, nameof(AccountId))]
     public bool HasLoggedOn { get; protected set; }
 
-    [MemberNotNullWhen(true, nameof(AccountId))]
+    [MemberNotNullWhen(true, nameof(AccountId), nameof(LoggedOnCallback))]
     public bool IsLoggedOn { get; protected set; }
 
     public SteamID? AccountId { get; protected set; }
+    public SteamUser.LoggedOnCallback? LoggedOnCallback { get; protected set; }
 
     private readonly CancellationTokenSource _runManagerCts = new();
     private readonly Task _runManagerTask;
@@ -88,6 +89,7 @@ public class SteamConnection : IAsyncDisposable
         }
 
         AccountId = callback.ClientSteamID;
+        LoggedOnCallback = loggedOnTaskSource.Task.Result;
         HasLoggedOn = true;
         IsLoggedOn = true;
     }
