@@ -72,6 +72,7 @@ public class SteamConnection : IAsyncDisposable
         _logger.LogDebug("Connected to Steam");
     }
 
+    [MemberNotNull(nameof(LoggedOnCallback))]
     public async Task LogOn()
     {
         if (!IsConnected) throw new InvalidOperationException();
@@ -145,6 +146,7 @@ public class SteamConnection : IAsyncDisposable
         HasAuthenticated = true;
     }
 
+    [MemberNotNull(nameof(AccountName), nameof(TokenSet))]
     public void DbAuth(SteamAccountCredential credential)
     {
         AccountName = credential.Account.SteamAccountName;
