@@ -300,13 +300,6 @@ public class SteamSyncConnection : IAsyncDisposable
                 .Where(license => license.LastSeen < seenTime)
                 .ExecuteDeleteAsync(ct);
         }
-        return;
-
-        async Task UpsertEntitlement(HazeDbContext dbContext, SteamApps.LicenseListCallback.License license, CancellationToken ct = default)
-        {
-            var dbEntitlement = await dbContext.SteamLicenseEntitlements.FindOrCreateAsync(license, context.AccountId, ct);
-            dbEntitlement.LastSeen = seenTime;
-        }
     }
 
     async Task RefreshDepots(SteamSyncRefreshContext context, CancellationToken ct = default)
