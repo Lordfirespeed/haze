@@ -22,7 +22,10 @@ public class SteamConnection : IAsyncDisposable
     public string? AccountName { get; protected set; }
     public SteamTokenSet? TokenSet { get; protected set; }
 
-    [MemberNotNullWhen(true, nameof(AccountId))]
+    [MemberNotNullWhen(true, nameof(LoggedOnCallback))]
+    public bool HasAttemptedLogOn => LoggedOnCallback is not null;
+
+    [MemberNotNullWhen(true, nameof(AccountId), nameof(LoggedOnCallback))]
     public bool HasLoggedOn { get; protected set; }
 
     [MemberNotNullWhen(true, nameof(AccountId), nameof(LoggedOnCallback))]
@@ -84,12 +87,13 @@ public class SteamConnection : IAsyncDisposable
         });
         await loggedOnTaskSource.Task;
         var callback = loggedOnTaskSource.Task.Result;
+        LoggedOnCallback = loggedOnTaskSource.Task.Result;
+
         if (callback.Result is not EResult.OK) {
             throw new Exception($"Steam logon failed: {callback.Result} / {callback.ExtendedResult}");
         }
 
         AccountId = callback.ClientSteamID;
-        LoggedOnCallback = loggedOnTaskSource.Task.Result;
         HasLoggedOn = true;
         IsLoggedOn = true;
     }
