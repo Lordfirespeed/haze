@@ -83,7 +83,7 @@ public static class DbSetExtensions
             return dbLicense;
         }
 
-        public IQueryable<SteamLicense> WhereKeyIn(ICollection<LicensePrimaryKey> keys)
+        private IQueryable<SteamLicense> WhereKeyIn(ICollection<LicensePrimaryKey> keys)
         {
             var keyTuplesString = String.Join(",", keys.Select(key => key.ToQueryString()));
 #pragma warning disable EF1002
@@ -122,7 +122,7 @@ public static class DbSetExtensions
         }
     }
 
-    public sealed record LicensePrimaryKey(SteamID OwnerId, uint PackageId)
+    private sealed record LicensePrimaryKey(SteamID OwnerId, uint PackageId)
     {
         public bool Matches(SteamLicense dbLicense) =>
             dbLicense.OwnerAccountId == OwnerId && dbLicense.PackageId == PackageId;
