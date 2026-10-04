@@ -161,6 +161,65 @@ public static class DbSetExtensions
             entry.Property(nameof(SteamLicenseEntitlement.LicensePackageId)).CurrentValue = license.PackageID;
             return dbEntitlement;
         }
+
+        private IQueryable<SteamLicenseEntitlement> WhereKeyIn(ICollection<EntitlementPrimaryKey> keys)
+        {
+            var keyTuplesString = String.Join(",", keys.Select(key => key.ToQueryString()));
+#pragma warning disable EF1002
+            return dbSet.FromSqlRaw(
+                $"""
+                SELECT * FROM "SteamLicenseEntitlements" WHERE ("EntitledAccountId","LicenseOwnerAccountId", "LicensePackageId") in ({keyTuplesString})
+                """
+            );
+#pragma warning restore EF1002
+        }
+
+        public async Task FindOrCreateManyAsync(
+            IEnumerable<SteamApps.LicenseListCallback.License> licenses,
+            SteamID entitleeId,
+            DateTime seenTime,
+            CancellationToken ct = default
+        ) {
+            var toCreateEntitlementKeys = licenses.Select(
+                license => EntitlementPrimaryKey.FromLicenseList(license, entitleeId)
+            ).ToHashSet();
+            var existingEntitlements = dbSet.WhereKeyIn(toCreateEntitlementKeys).AsAsyncEnumerable();
+            await foreach (var entitlement in existingEntitlements.WithCancellation(ct)) {
+                toCreateEntitlementKeys.Remove(EntitlementPrimaryKey.FromDb(entitlement));
+                entitlement.LastSeen = seenTime;
+            }
+            foreach (var licenseKey in toCreateEntitlementKeys) {
+                var dbEntitlement = new SteamLicenseEntitlement {
+                    EntitledAccountId = licenseKey.EntitleeId,
+                    LicenseOwnerAccountId = licenseKey.OwnerId,
+                    LicensePackageId = licenseKey.PackageId,
+                    LastSeen = seenTime,
+                };
+                var entry = dbSet.Add(dbEntitlement);
+                // change tracker thinks package ID is unset if the package ID is zero - force it to accept package ID
+                entry.Property(nameof(SteamLicenseEntitlement.LicensePackageId)).CurrentValue = licenseKey.PackageId;
+            }
+        }
+    }
+
+    private sealed record EntitlementPrimaryKey(SteamID EntitleeId, SteamID OwnerId, uint PackageId)
+    {
+        public bool Matches(SteamLicenseEntitlement dbEntitlement) =>
+            dbEntitlement.EntitledAccountId == EntitleeId &&
+            dbEntitlement.LicenseOwnerAccountId == OwnerId &&
+            dbEntitlement.LicensePackageId == PackageId;
+
+        public static EntitlementPrimaryKey FromLicenseList(SteamApps.LicenseListCallback.License license, SteamID entitleeId)
+        {
+            return new EntitlementPrimaryKey(entitleeId, license.GetOwnerFullId(entitleeId), license.PackageID);
+        }
+
+        public static EntitlementPrimaryKey FromDb(SteamLicenseEntitlement dbEntitlement)
+        {
+            return new EntitlementPrimaryKey(dbEntitlement.EntitledAccountId, dbEntitlement.LicenseOwnerAccountId, dbEntitlement.LicensePackageId);
+        }
+
+        public string ToQueryString() => $"({EntitleeId.ConvertToUInt64()},{OwnerId.ConvertToUInt64()},{PackageId})";
     }
 
     extension(DbSet<SteamDepot> dbSet)
