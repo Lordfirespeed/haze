@@ -78,20 +78,34 @@ public class GreedySchedulingService(
             .FirstOrDefaultAsync(attempt => attempt.CredentialId == credential.CredentialId && attempt.AccessTokenRefreshed, cancellationToken: ct);
         if (lastSuccessfulRefresh is not null && DateTime.UtcNow - lastSuccessfulRefresh.AttemptedAt <= new TimeSpan(0, 5, 0)) return;
 
-        {
+        try {
             await using var connection = new SteamConnection(logger);
             await connection.Connect();
 
             connection.DbAuth(credential);
-            await connection.LogOn(); // this can raise exceptions
-            await connection.RefreshTokenSet();  // in theory, same here
+            try {
+                await connection.LogOn(); // this can raise exceptions
+                await connection.RefreshTokenSet(); // in theory, same here
+            } finally {
+                var attemptLog = new SteamAccountCredentialRefreshAttempt
+                {
+                    AttemptedAt = DateTime.UtcNow,
+                    LogOnResult = connection.LoggedOnCallback?.Result ?? default,
+                    LogOnExtendedResult = connection.LoggedOnCallback?.ExtendedResult ?? default,
+                    AccessTokenRefreshed = credential.SteamAccessToken != connection.TokenSet.AccessToken,
+                    RefreshTokenRefreshed = credential.SteamRefreshToken != connection.TokenSet.RefreshToken,
+                    CredentialId = credential.CredentialId,
+                };
+                dbContext.SteamAccountCredentialRefreshAttempts.Add(attemptLog);
+            }
 
+            Debug.Assert(connection.IsLoggedOn);
             Debug.Assert(connection.HasAuthenticated);
             credential.SteamAccessToken = connection.TokenSet.AccessToken;
             credential.SteamRefreshToken = connection.TokenSet.RefreshToken;
+        } finally {
+            await dbContext.SaveChangesAsync(ct);
         }
-
-        await dbContext.SaveChangesAsync(ct);
     }
 
     protected async Task AttemptToStartJob(HazeClientJob job, HazeDbContext dbContext, CancellationToken ct)
