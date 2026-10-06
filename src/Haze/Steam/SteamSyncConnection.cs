@@ -214,6 +214,7 @@ public class SteamSyncConnection : IAsyncDisposable
     {
         context.StartedAtUtc = DateTime.UtcNow;
         await RefreshLicenses(context, ct);
+        await FetchProductInfo(context, ct);
         await RefreshApps(context, ct);
         await RefreshDepots(context, ct);
         await RefreshPackageRelations(context, ct);
@@ -236,6 +237,36 @@ public class SteamSyncConnection : IAsyncDisposable
             6,
             ct
         );
+    }
+
+    async Task FetchProductInfo(SteamSyncRefreshContext context, CancellationToken ct = default)
+    {
+        context.PopulatePackageTokensFromLicenseList();
+        var packageRequests = context.LicensePackageIds.Select(MakeRequestForPackageId);
+        var packageResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
+        if (packageResultSet.Failed) throw new Exception();  // todo: specific exception
+        context.PackageInfos = [..packageResultSet.Results!.SelectMany(result => result.Packages.Values)];
+        context.PackageInfoLookup = context.PackageInfos.ToImmutableDictionary(package => package.ID);
+
+        // I think we might not need to request *all* the apps here
+        await context.PopulateAppTokensByRequesting();
+        var appRequests = context.PackageInfosAppIds.Select(MakeRequestForAppId);
+        var appResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: appRequests, packages: []);
+        if (appResultSet.Failed) throw new Exception();  // todo: specific exception
+        context.AppInfos = [..appResultSet.Results!.SelectMany(result => result.Apps.Values)];
+        return;
+
+        SteamApps.PICSRequest MakeRequestForPackageId(uint id)
+        {
+            var token = context.PackageTokens.TryGetValue(id, out var maybeToken) ? maybeToken : 0;
+            return new SteamApps.PICSRequest(id, token);
+        }
+
+        SteamApps.PICSRequest MakeRequestForAppId(uint id)
+        {
+            var token = context.AppTokens.TryGetValue(id, out var maybeToken) ? maybeToken : 0;
+            return new SteamApps.PICSRequest(id, token);
+        }
     }
 
     async Task RefreshLicenses(SteamSyncRefreshContext context, CancellationToken ct = default)
@@ -324,30 +355,11 @@ public class SteamSyncConnection : IAsyncDisposable
             ct
         );
         _logger.LogDebug($"{DateTime.UtcNow}: Done upserting depots for {context.AccountId}");
-        return;
-
-        SteamApps.PICSRequest MakeRequestForId(uint id)
-        {
-            var token = context.PackageTokens.TryGetValue(id, out var maybeToken) ? maybeToken : 0;
-            return new SteamApps.PICSRequest(id, token);
-        }
     }
 
     async Task RefreshApps(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
-        context.PopulatePackageTokensFromLicenseList();
-        var packageRequests = context.LicensePackageIds.Select(MakeRequestForId);
-        var packageResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
-        if (packageResultSet.Failed) throw new Exception();  // todo: specific exception
-        context.PackageInfos = [..packageResultSet.Results!.SelectMany(result => result.Packages.Values)];
-        context.PackageInfoLookup = context.PackageInfos.ToImmutableDictionary(package => package.ID);
-
-        // I think we might not need to request *all* the apps here
-        await context.PopulateAppTokensByRequesting();
-        var appRequests = context.PackageInfosAppIds.Select(MakeRequestForId);
-        var appResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: appRequests, packages: []);
-        if (appResultSet.Failed) throw new Exception();  // todo: specific exception
-        context.AppInfos = [..appResultSet.Results!.SelectMany(result => result.Apps.Values)];
+        if (context.AppInfos is null) throw new InvalidOperationException();
 
         // inserts of apps use optimistic concurrency and should retry on unique constraint violations
         _logger.LogDebug($"{DateTime.UtcNow}: Upserting apps for {context.AccountId}");
@@ -362,13 +374,6 @@ public class SteamSyncConnection : IAsyncDisposable
             ct
         );
         _logger.LogDebug($"{DateTime.UtcNow}: Done upserting apps for {context.AccountId}");
-        return;
-
-        SteamApps.PICSRequest MakeRequestForId(uint id)
-        {
-            var token = context.AppTokens.TryGetValue(id, out var maybeToken) ? maybeToken : 0;
-            return new SteamApps.PICSRequest(id, token);
-        }
     }
 
     async Task RefreshPackageRelations(SteamSyncRefreshContext context, CancellationToken ct = default)
