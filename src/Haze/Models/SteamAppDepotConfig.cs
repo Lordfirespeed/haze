@@ -28,6 +28,8 @@ public class SteamAppDepotConfig
     [StringLength(16)]
     public string? OperatingSystemArch { get; set; }
 
+    public uint? DlcAppId { get; set; }
+
     [ForeignKey(nameof(SteamAppId))]
     public SteamApp App { get; set; } = null!;
 
