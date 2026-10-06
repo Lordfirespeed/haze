@@ -214,8 +214,8 @@ public class SteamSyncConnection : IAsyncDisposable
     {
         context.StartedAtUtc = DateTime.UtcNow;
         await RefreshLicenses(context, ct);
-        await RefreshDepots(context, ct);
         await RefreshApps(context, ct);
+        await RefreshDepots(context, ct);
         await RefreshPackageRelations(context, ct);
         await RefreshAppDepotConfigs(context, ct);
         var refreshCompletedAt = DateTime.UtcNow;
@@ -305,17 +305,13 @@ public class SteamSyncConnection : IAsyncDisposable
 
     async Task RefreshDepots(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
-        context.PopulatePackageTokensFromLicenseList();
-        var packageRequests = context.LicensePackageIds.Select(MakeRequestForId);
-        var packageResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
-        if (packageResultSet.Failed) throw new Exception();  // todo: specific exception
-        context.PackageInfos = [..packageResultSet.Results!.SelectMany(result => result.Packages.Values)];
-        context.PackageInfoLookup = context.PackageInfos.ToImmutableDictionary(package => package.ID);
+        if (context.PackageInfos is null) throw new InvalidOperationException();
+        if (context.AppInfos is null) throw new InvalidOperationException();
 
         _logger.LogDebug($"{DateTime.UtcNow}: Upserting depots for {context.AccountId}");
-        var allDepotIds = context.PackageInfos.SelectMany(package => package.KeyValues["depotids"].Children)
-            .Select(child => child.AsUnsignedInteger())
-            .ToHashSet();
+        var depotIdsFromPackages = context.PackageInfos.SelectMany(package => package.GetPackageDepotIds());
+        var depotIdsFromAppConfigs = context.AppInfos.SelectMany(app => app.GetAppDepots()).Select(depot => depot.DepotId);
+        var allDepotIds = depotIdsFromPackages.Concat(depotIdsFromAppConfigs).ToHashSet();
 
         // inserts of depots use optimistic concurrency and should retry on unique constraint violations
         await context.DbContextFactory.ExecuteRetryingAsync(async (dbContext, ct) =>
@@ -339,6 +335,13 @@ public class SteamSyncConnection : IAsyncDisposable
 
     async Task RefreshApps(SteamSyncRefreshContext context, CancellationToken ct = default)
     {
+        context.PopulatePackageTokensFromLicenseList();
+        var packageRequests = context.LicensePackageIds.Select(MakeRequestForId);
+        var packageResultSet = await context.Connection.Apps.PICSGetProductInfo(apps: [], packages: packageRequests);
+        if (packageResultSet.Failed) throw new Exception();  // todo: specific exception
+        context.PackageInfos = [..packageResultSet.Results!.SelectMany(result => result.Packages.Values)];
+        context.PackageInfoLookup = context.PackageInfos.ToImmutableDictionary(package => package.ID);
+
         // I think we might not need to request *all* the apps here
         await context.PopulateAppTokensByRequesting();
         var appRequests = context.PackageInfosAppIds.Select(MakeRequestForId);
@@ -434,7 +437,7 @@ public class SteamSyncConnection : IAsyncDisposable
 
             dbApp.DepotConfigs.Clear();
             foreach (var (depot, idx) in app.GetAppDepots().Select((depot, i) => (depot, i))) {
-                var dbDepotConfig = dbContext.SteamAppDepotConfigs.Local.FindEntry((app.ID, depot.DepotId))?.Entity;
+                var dbDepotConfig = dbContext.SteamAppDepotConfigs.Local.FindEntryUntyped([app.ID, depot.DepotId])?.Entity;
                 dbDepotConfig ??= await dbContext.SteamAppDepotConfigs.FindAsync([app.ID, depot.DepotId], ct);
                 dbDepotConfig ??= new SteamAppDepotConfig { SteamAppId = app.ID, SteamDepotId = depot.DepotId };
                 dbDepotConfig.MountOrder = (uint)idx;
