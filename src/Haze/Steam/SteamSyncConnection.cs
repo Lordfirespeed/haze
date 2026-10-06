@@ -217,6 +217,7 @@ public class SteamSyncConnection : IAsyncDisposable
         await RefreshDepots(context, ct);
         await RefreshApps(context, ct);
         await RefreshPackageRelations(context, ct);
+        await RefreshAppDepotConfigs(context, ct);
         var refreshCompletedAt = DateTime.UtcNow;
 
         var attempt = new SteamAccountProductInfoRefreshAttempt
@@ -410,6 +411,44 @@ public class SteamSyncConnection : IAsyncDisposable
         await dbContext.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         _logger.LogDebug($"{DateTime.UtcNow}: Done updating package relations for {context.AccountId}");
+    }
+
+    async Task RefreshAppDepotConfigs(SteamSyncRefreshContext context, CancellationToken ct = default)
+    {
+        if (context.PackageInfos is null) throw new InvalidOperationException();
+        if (context.AppInfos is null) throw new InvalidOperationException();
+
+        _logger.LogDebug($"{DateTime.UtcNow}: Updating app depot configs for {context.AccountId}");
+        await using var dbContext = await context.DbContextFactory.CreateDbContextAsync(ct);
+        await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
+        var toUpdate = await context.GetAppIdsWithChanges(dbContext, ct);
+
+        foreach (var app in context.PackageInfos) {
+            if (!toUpdate.Contains(app.ID)) continue;
+
+            var dbApp = await dbContext.SteamApps
+                .ForUpdate()
+                .Include(p => p.DepotConfigs)
+                .FirstOrDefaultAsync(p => p.SteamAppId == app.ID, ct);
+            Debug.Assert(dbApp is not null);
+
+            dbApp.DepotConfigs.Clear();
+            foreach (var (depot, idx) in app.GetAppDepots().Select((depot, i) => (depot, i))) {
+                var dbDepotConfig = dbContext.SteamAppDepotConfigs.Local.FindEntry((app.ID, depot.DepotId))?.Entity;
+                dbDepotConfig ??= await dbContext.SteamAppDepotConfigs.FindAsync([app.ID, depot.DepotId], ct);
+                dbDepotConfig ??= new SteamAppDepotConfig { SteamAppId = app.ID, SteamDepotId = depot.DepotId };
+                dbDepotConfig.MountOrder = (uint)idx;
+                dbDepotConfig.Optional = depot.Optional;
+                dbDepotConfig.Language = depot.Language;
+                dbDepotConfig.OperatingSystems = depot.OSList;
+                dbDepotConfig.OperatingSystemArch = depot.OSArch;
+                dbDepotConfig.DlcAppId = depot.DLCAppId;
+                dbApp.DepotConfigs.Add(dbDepotConfig);
+            }
+        }
+        await dbContext.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        _logger.LogDebug($"{DateTime.UtcNow}: Done updating app depot configs for {context.AccountId}");
     }
 
     public async ValueTask DisposeAsync()
