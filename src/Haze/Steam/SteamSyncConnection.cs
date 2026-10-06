@@ -423,7 +423,7 @@ public class SteamSyncConnection : IAsyncDisposable
         await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
         var toUpdate = await context.GetAppIdsWithChanges(dbContext, ct);
 
-        foreach (var app in context.PackageInfos) {
+        foreach (var app in context.AppInfos) {
             if (!toUpdate.Contains(app.ID)) continue;
 
             var dbApp = await dbContext.SteamApps
