@@ -42,6 +42,7 @@ public static class ProductInfoExtensions
         public string? OSArch => OSArchKeyValue.IsValid ? OSArchKeyValue.AsString() : null;
         private KeyValue LanguageKeyValue => this["config"]["language"];
         public string? Language => String.IsNullOrWhiteSpace(LanguageKeyValue.Value) ? null : LanguageKeyValue.Value;
+
         /**
          * This seems to be present on a subset of DLC depots (depots with <see cref="DLCAppId"/> set).
          * When it is present, it is always set to the same app ID as <see cref="DLCAppId"/>.
@@ -53,11 +54,11 @@ public static class ProductInfoExtensions
         public KeyValue RealmKeyValue => this["config"]["realm"];
         public KeyValue ModKeyValue => this["config"]["mod"];
 
-        public uint DepotFromAppId => this["depotfromapp"].AsUnsignedInteger();
-        public uint DLCAppId => this["dlcappid"].AsUnsignedInteger();
+        public uint? DepotFromAppId => this["depotfromapp"].IsValid ? this["depotfromapp"].AsUnsignedInteger() : null;
+        public uint? DLCAppId => this["dlcappid"].IsValid ? this["dlcappid"].AsUnsignedInteger() : null;
         public bool Optional => this["optional"].AsBoolean();
         public bool SharedInstall => this["sharedinstall"].AsBoolean();
-        public uint SharedDepotType => this["shareddepottype"].AsUnsignedInteger();
+        public uint? SharedDepotType => this["shareddepottype"].IsValid ? this["shareddepottype"].AsUnsignedInteger() : null;
         public bool SystemDefined => this["systemdefined"].AsBoolean();
 
         public KeyValue ManifestsKeyValue => this["manifests"];
