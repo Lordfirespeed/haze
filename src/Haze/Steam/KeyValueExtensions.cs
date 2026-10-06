@@ -9,6 +9,9 @@ public static class KeyValueExtensions
 {
     extension(KeyValue keyValue)
     {
+        public bool IsInvalid => ReferenceEquals(keyValue, KeyValue.Invalid);
+        public bool IsValid => !keyValue.IsInvalid;
+
         public IEnumerable<T> AsArray<T>(Func<KeyValue, T> mapper)
         {
             return keyValue.Children.Select(mapper);
