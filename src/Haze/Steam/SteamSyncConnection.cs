@@ -372,6 +372,7 @@ public class SteamSyncConnection : IAsyncDisposable
         if (context.PackageInfos is null) throw new InvalidOperationException();
         if (context.AppInfos is null) throw new InvalidOperationException();
 
+        _logger.LogDebug($"{DateTime.UtcNow}: Updating package relations for {context.AccountId}");
         await using var dbContext = await context.DbContextFactory.CreateDbContextAsync(ct);
         await using var tx = await dbContext.Database.BeginTransactionAsync(ct);
         var toUpdate = await context.GetPackageIdsWithChanges(dbContext, ct);
@@ -408,6 +409,7 @@ public class SteamSyncConnection : IAsyncDisposable
         }
         await dbContext.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+        _logger.LogDebug($"{DateTime.UtcNow}: Done updating package relations for {context.AccountId}");
     }
 
     public async ValueTask DisposeAsync()
